@@ -1,2 +1,2 @@
 # junos-update
-automatic detection juniper's model and automatic junos package update
+automatic detect Juniper models and automatically update JUNOS packages
