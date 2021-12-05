@@ -145,7 +145,15 @@ def copy(hostname, dev):
 
     # copy
     if args.dryrun:
-        print("dryrun: scp(cheksum:%s) %s %s:%s" % (config.get(hostname, "hashalgo"), get_model_file(hostname, dev.facts["model"]), hostname, config.get(hostname, "rpath")))
+        print(
+            "dryrun: scp(cheksum:%s) %s %s:%s"
+            % (
+                config.get(hostname, "hashalgo"),
+                get_model_file(hostname, dev.facts["model"]),
+                hostname,
+                config.get(hostname, "rpath"),
+            )
+        )
         ret = False
     else:
         try:
@@ -239,7 +247,13 @@ def install(hostname, dev):
 
     # request system software add ...
     if args.dryrun:
-        print("dryrun: request system software add %s/%s" % (config.get(hostname, "rpath"), get_model_file(hostname, dev.facts["model"])))
+        print(
+            "dryrun: request system software add %s/%s"
+            % (
+                config.get(hostname, "rpath"),
+                get_model_file(hostname, dev.facts["model"]),
+            )
+        )
         ret = False
     else:
         sw = SW(dev)
@@ -622,7 +636,7 @@ def show_version(hostname, dev):
         )
     elif ret == 0:
         print(" \trunning version seems same as pedning version")
-            
+
     # local package check
     local = check_local_package(hostname, dev)
 
@@ -707,7 +721,7 @@ def main():
 
     if read_config() is True:
         print(args.inifile, "read error")
-        return False
+        return True
 
     targets = []
     if len(args.specialhosts) == 0:
@@ -783,12 +797,9 @@ def main():
     if args.debug:
         print("main: end")
 
-    return True
+    return False
 
 
 if __name__ == "__main__":
     # facts()
-    if main() is True:
-        exit(0)
-    else:
-        exit(1)
+    return main()
