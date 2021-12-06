@@ -187,3 +187,68 @@ dryrun: clear system reboot
 dryrun: request system configuration rescue save
 dryrun: request system software add /var/tmp/junos-install-mx-x86-64-18.4R3-S10.tgz
 ```
+
+- default
+
+```
+% junos-update gw1.example.jp
+[gw1.example.jp]
+{'2RE': True,
+ 'HOME': '/var/home/exadmin',
+ 'RE0': {'last_reboot_reason': 'Router rebooted after a normal shutdown.',
+         'mastership_state': 'master',
+         'model': 'RE-S-1800x4',
+         'status': 'OK',
+         'up_time': '100 days, 10 hours, 20 minutes, 30 seconds'},
+ 'RE1': {'last_reboot_reason': 'Router rebooted after a normal shutdown.',
+         'mastership_state': 'backup',
+         'model': 'RE-S-1800x4',
+         'status': 'OK',
+         'up_time': '123 days, 12 hours, 34 minutes, 56 seconds'},
+ 'RE_hw_mi': False,
+ 'current_re': ['re0', 'master', 'node', 'fwdd', 'member', 'pfem'],
+ 'domain': None,
+ 'fqdn': 'gw1',
+ 'hostname': 'gw1',
+ 'hostname_info': {'re0': 'gw1', 're1': 'gw1'},
+ 'ifd_style': 'CLASSIC',
+ 'junos_info': {'re0': {'object': junos.version_info(major=(18, 4), type=R, minor=3-S7, build=2),
+                        'text': '18.4R3-S7.2'},
+                're1': {'object': junos.version_info(major=(18, 4), type=R, minor=3-S7, build=2),
+                        'text': '18.4R3-S7.2'}},
+ 'master': 'RE0',
+ 'model': 'MX240',
+ 'model_info': {'re0': 'MX240', 're1': 'MX240'},
+ 'personality': 'MX',
+ 're_info': {'default': {'0': {'last_reboot_reason': 'Router rebooted after a '
+                                                     'normal shutdown.',
+                               'mastership_state': 'master',
+                               'model': 'RE-S-1800x4',
+                               'status': 'OK'},
+                         '1': {'last_reboot_reason': 'Router rebooted after a '
+                                                     'normal shutdown.',
+                               'mastership_state': 'backup',
+                               'model': 'RE-S-1800x4',
+                               'status': 'OK'},
+                         'default': {'last_reboot_reason': 'Router rebooted '
+                                                           'after a normal '
+                                                           'shutdown.',
+                                     'mastership_state': 'master',
+                                     'model': 'RE-S-1800x4',
+                                     'status': 'OK'}}},
+ 're_master': {'default': '0'},
+ 'serialnumber': 'XXXXXXXXXXXX',
+ 'srx_cluster': None,
+ 'srx_cluster_id': None,
+ 'srx_cluster_redundancy_group': None,
+ 'switch_style': 'BRIDGE_DOMAIN',
+ 'vc_capable': False,
+ 'vc_fabric': None,
+ 'vc_master': None,
+ 'vc_mode': None,
+ 'version': '18.4R3-S7.2',
+ 'version_RE0': '18.4R3-S7.2',
+ 'version_RE1': '18.4R3-S7.2',
+ 'version_info': junos.version_info(major=(18, 4), type=R, minor=3-S7, build=2),
+ 'virtual': False}
+ ```
