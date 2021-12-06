@@ -120,14 +120,14 @@ reboot requested by exadmin at Sat Dec  4 05:00:00 2021
 [rt2.example.jp]
 hostname: rt2
 model: EX3400-24T
-running version: 18.4R3-S7.2
+running version: 18.4R3-S9.2
 planning version: 18.4R3-S10
 	running version seems older than planning version.
 pending version: 18.4R3-S10
 	running version seems older than pending version. Please plan to reboot.
 local package: junos-arm-32-18.4R3-S10.tgz is found. checksum is OK.
 remote package: junos-arm-32-18.4R3-S10.tgz is not found.
-shutdown requested by exadmin at Sun Dec 12 08:30:00 2021
+reboot requested by exadmin at Wed Dec  8 01:00:00 2021
 
 [rt3.example.jp]
 hostname: rt3
