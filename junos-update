@@ -721,7 +721,7 @@ def main():
 
     if read_config() is True:
         print(args.recipe, "is not ready")
-        exit(1)
+        sys.exit(1)
 
     targets = []
     if len(args.specialhosts) == 0:
@@ -733,14 +733,14 @@ def main():
                 targets.append(i)
             else:
                 print(i, "is not found in", args.recipe)
-                exit(1)
+                sys.exit(1)
     else:
         for i in args.specialhosts:
             if config.has_section(i):
                 tmp = config.get(i, "host")
             else:
                 print(i, "is not found in", args.recipe)
-                exit(1)
+                sys.exit(1)
             if args.debug is True:
                 print(i, tmp)
             targets.append(i)
@@ -757,7 +757,7 @@ def main():
 
         err, dev = connect(t)
         if err is True or dev is None:
-            exit(1)
+            sys.exit(1)
         if (
             args.list_format is None
             and args.copy is False
@@ -773,17 +773,17 @@ def main():
         if args.copy is True or args.update is True:
             err = copy(t, dev)
             if err is True:
-                exit(1)
+                sys.exit(1)
         # install or update
         if args.install is True or args.update is True:
             err = install(t, dev)
             if err is True:
-                exit(1)
+                sys.exit(1)
         # show version
         if args.showversion is True:
             err = show_version(t, dev)
             if err is True:
-                exit(1)
+                sys.exit(1)
         # close
         try:
             dev.close()
@@ -801,5 +801,5 @@ def main():
 
 
 if __name__ == "__main__":
-    exit(main())
+    sys.exit(main())
 
