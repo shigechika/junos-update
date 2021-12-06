@@ -44,10 +44,10 @@ version = "0.1"
 def read_config():
     global config
     config = configparser.ConfigParser(allow_no_value=True)
-    config.read(args.inifile)
+    config.read(args.recipe)
     if args.debug is True:
         if len(config.sections()) == 0:
-            print(args.inifile, "is empty")
+            print(args.recipe, "is empty")
             return True
     for section in config.sections():
         if config.has_option(section, "host"):
@@ -295,7 +295,7 @@ def get_model_file(hostname, model):
     try:
         return config.get(hostname, model.lower() + ".file")
     except Exception as e:
-        print(config.read(args.inifile), e)
+        print(config.read(args.recipe), e)
         sys.exit(1)
 
 
@@ -303,7 +303,7 @@ def get_model_hash(hostname, model):
     try:
         return config.get(hostname, model.lower() + ".hash")
     except Exception as e:
-        print(config.read(args.inifile), e)
+        print(config.read(args.recipe), e)
         sys.exit(1)
 
 
@@ -655,7 +655,7 @@ def show_version(hostname, dev):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="junos automatic update",
+        description="automatic detect Juniper models and automatically update JUNOS packages",
         epilog="default action is show device facts",
     )
     parser.add_argument(
@@ -666,7 +666,7 @@ def main():
         help="special hostname(s)",
     )
     parser.add_argument(
-        "--inifile",
+        "--recipe",
         default="junos.ini",
         type=str,
         help="junos recipe filename (default: %(default)s)",
@@ -720,8 +720,8 @@ def main():
         print("main: start")
 
     if read_config() is True:
-        print(args.inifile, "read error")
-        return True
+        print(args.recipe, "is not ready")
+        exit(1)
 
     targets = []
     if len(args.specialhosts) == 0:
@@ -732,14 +732,14 @@ def main():
             if tmp is not None:
                 targets.append(i)
             else:
-                print(i, "is not found in", args.inifile)
+                print(i, "is not found in", args.recipe)
                 exit(1)
     else:
         for i in args.specialhosts:
             if config.has_section(i):
                 tmp = config.get(i, "host")
             else:
-                print(i, "is not found in", args.inifile)
+                print(i, "is not found in", args.recipe)
                 exit(1)
             if args.debug is True:
                 print(i, tmp)
@@ -801,5 +801,5 @@ def main():
 
 
 if __name__ == "__main__":
-    # facts()
-    return main()
+    exit(main())
+

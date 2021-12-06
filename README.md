@@ -7,14 +7,14 @@ automatic detect Juniper models and automatically update JUNOS packages
 usage: junos-update [-h] [--inifile INIFILE] [--list] [--longlist] [--dryrun] [--copy] [--install] [--update] [--showversion] [-d] [-V]
                     [hostname ...]
 
-junos automatic update
+automatic detect Juniper models and automatically update JUNOS packages
 
 positional arguments:
   hostname              special hostname(s)
 
 optional arguments:
   -h, --help            show this help message and exit
-  --inifile INIFILE     junos recipe filename (default: junos.ini)
+  --recipe RECIPE       junos recipe filename (default: junos.ini)
   --list, --short, -ls  short list remote path (like as ls)
   --longlist, -ll       long list remote path (like as ls -l)
   --dryrun              test for --copy/--install/--update. connect and message output. No execute.
