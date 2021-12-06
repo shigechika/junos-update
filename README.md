@@ -176,5 +176,14 @@ remote package: jinstall-ex-4300-20.4R3.8-signed.tgz is found. checksum is OK.
 shutdown requested by exadmin at Sun Dec 12 08:30:00 2021
 ```
 
+- --dryrun
 
-
+```
+% junos-update --dryrun --update gw1.example.jp
+[gw1.example.jp]
+remote package: junos-install-mx-x86-64-18.4R3-S10.tgz is found. checksum is OK.
+remote package is already copied successfully
+dryrun: clear system reboot
+dryrun: request system configuration rescue save
+dryrun: request system software add /var/tmp/junos-install-mx-x86-64-18.4R3-S10.tgz
+```
