@@ -179,13 +179,14 @@ shutdown requested by exadmin at Sun Dec 12 08:30:00 2021
 - --dryrun
 
 ```
-% junos-update --dryrun --update gw1.example.jp
-[gw1.example.jp]
-remote package: junos-install-mx-x86-64-18.4R3-S10.tgz is found. checksum is OK.
-remote package is already copied successfully
+% junos-update --update --dryrun srx.example.jp
+[srx.example.jp]
+remote package: junos-srxentedge-x86-64-18.4R3-S9.2.tgz is not found.
+dryrun: request system storage cleanup
+dryrun: scp(cheksum:md5) junos-srxentedge-x86-64-18.4R3-S9.2.tgz srx.example.jp:/var/tmp
 dryrun: clear system reboot
 dryrun: request system configuration rescue save
-dryrun: request system software add /var/tmp/junos-install-mx-x86-64-18.4R3-S10.tgz
+dryrun: request system software add /var/tmp/junos-srxentedge-x86-64-18.4R3-S9.2.tgz
 ```
 
 - default
