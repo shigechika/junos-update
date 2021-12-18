@@ -1,5 +1,5 @@
 # junos-update
-automatic detect Juniper models and automatically update JUNOS packages
+automatically detect Juniper models and automatically update JUNOS packages
 
 # usage
 ```
@@ -7,7 +7,7 @@ automatic detect Juniper models and automatically update JUNOS packages
 usage: junos-update [-h] [--inifile INIFILE] [--list] [--longlist] [--dryrun] [--copy] [--install] [--update] [--showversion] [-d] [-V]
                     [hostname ...]
 
-automatic detect Juniper models and automatically update JUNOS packages
+automatically detect Juniper models and automatically update JUNOS packages
 
 positional arguments:
   hostname              special hostname(s)
@@ -26,12 +26,12 @@ optional arguments:
   -d, --debug           for debug
   -V                    show program's version number and exit
 
-default action is show device facts
+default action is to show device facts
 ```
 
 # PyEZ
 
-require PyEZ [https://www.juniper.net/documentation/product/us/en/junos-pyez]
+requires PyEZ [https://www.juniper.net/documentation/product/us/en/junos-pyez]
 
 ```
 % pip3 install junos-eznc
