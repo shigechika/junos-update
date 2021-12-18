@@ -1,17 +1,5 @@
 #!/usr/bin/env python3
-# -*- encoding: utf-8 -*-
 # -*- mode: python; python-indent-offset: 2 -*-
-# pip3 install junos-eznc
-#
-# Ubuntu 21:
-# sudo apt install python3-pip
-#
-# CentOS 7:
-# sudo yum install python3 python3-pip
-#
-# CentOS 8:
-# sudo dnf install python3 python3-pip
-
 
 from distutils.version import LooseVersion
 from jnpr.junos import Device
@@ -656,7 +644,7 @@ def show_version(hostname, dev):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="automatic detect Juniper models and automatically update JUNOS packages",
+        description="automatically detect Juniper models and automatically update JUNOS packages",
         epilog="default action is show device facts",
     )
     parser.add_argument(

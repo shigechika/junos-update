@@ -3,8 +3,8 @@ automatically detect Juniper models and automatically update JUNOS packages
 
 # usage
 ```
-% ./junos-update -h
-usage: junos-update [-h] [--inifile INIFILE] [--list] [--longlist] [--dryrun] [--copy] [--install] [--update] [--showversion] [-d] [-V]
+% ./junos-update --help
+usage: junos-update [-h] [--recipe RECIPE] [--list] [--longlist] [--dryrun] [--copy] [--install] [--update] [--showversion] [-d] [-V]
                     [hostname ...]
 
 automatically detect Juniper models and automatically update JUNOS packages
@@ -26,7 +26,7 @@ optional arguments:
   -d, --debug           for debug
   -V                    show program's version number and exit
 
-default action is to show device facts
+default action is show device facts
 ```
 
 # PyEZ
