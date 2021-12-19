@@ -31,10 +31,32 @@ default action is show device facts
 
 # PyEZ
 
-requires PyEZ [https://www.juniper.net/documentation/product/us/en/junos-pyez]
+- requires PyEZ [https://www.juniper.net/documentation/product/us/en/junos-pyez]
 
 ```
 % pip3 install junos-eznc
+```
+
+- pip3
+
+Ubuntu 21
+```
+sudo apt install python3-pip
+```
+
+CentOS 7
+```
+sudo yum install python3-pip
+```
+
+CentOS 8
+```
+sudo dnf install python3-pip
+```
+
+macOS
+```
+brew install python3
 ```
 
 # example
