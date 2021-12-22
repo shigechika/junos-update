@@ -100,15 +100,19 @@ def connect(hostname):
 def copy(hostname, dev):
     if args.debug is True:
         print("copy: start")
-    if check_running_package(hostname, dev) is True:
-        print("Already Running, COPY Skip.")
-        return False
-    if check_remote_package(hostname, dev) is True:
-        print("remote package is already copied successfully")
-        return False
+    if args.force is True:
+        if args.debug is True:
+            print("copy: force copy")
+    else:
+        if check_running_package(hostname, dev) is True:
+            print("Already Running, COPY Skip.")
+            return False
+        if check_remote_package(hostname, dev) is True:
+            print("remote package is already copied successfully")
+            return False
 
     # request-system-storage-cleanup
-    if args.dryrun:
+    if args.dryrun is True:
         print("dryrun: request system storage cleanup")
     else:
         try:
@@ -155,7 +159,7 @@ def copy(hostname, dev):
                 checksum=get_model_hash(hostname, dev.facts["model"]),
                 checksum_timeout=900,  # default 300
                 checksum_algorithm=config.get(hostname, "hashalgo"),
-                force_copy=False,
+                force_copy=args.force,
             )
             if result is True:
                 if args.debug is True:
@@ -183,9 +187,13 @@ def copy(hostname, dev):
 def install(hostname, dev):
     if args.debug is True:
         print("install: start")
-    if check_running_package(hostname, dev) is True:
-        print("Already Running, INSTALL Skip.")
-        return False
+    if args.force is True:
+        if args.debug is True:
+            print("install: force install")
+    else:
+        if check_running_package(hostname, dev) is True:
+            print("Already Running, INSTALL Skip.")
+            return False
 
     # clear system reboot
     if args.dryrun:
@@ -259,7 +267,7 @@ def install(hostname, dev):
             checksum=get_model_hash(hostname, dev.facts["model"]),
             checksum_timeout=900,  # default 300
             checksum_algorithm=config.get(hostname, "hashalgo"),
-            force_copy=False,
+            force_copy=args.force,
             all_re=True,
         )
         del sw
@@ -695,6 +703,11 @@ def main():
         help="copy(=--copy) and install(=--install)",
     )
     parser.add_argument(
+        "--force",
+        action="store_true",
+        help="force execute copy, install and update",
+    )
+    parser.add_argument(
         "--showversion",
         "--version",
         action="store_true",
@@ -791,4 +804,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
