@@ -202,7 +202,7 @@ def install(hostname, dev):
     pending = get_pending_version(hostname, dev)
     if pending is not None:
         if args.debug is True:
-            print(f"install: pendig package exist={pending}")
+            print(f"install: pending package exist={pending}")
         planning = get_planning_version(hostname, dev)
         ret = compare_version(pending, planning)
         if args.debug is True:
