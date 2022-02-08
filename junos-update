@@ -221,7 +221,7 @@ def install(hostname, dev):
             if args.force is True:
               pass
             else:
-              return True
+              return False
 
         if args.dryrun:
             print("dryrun: request system software rollback")
