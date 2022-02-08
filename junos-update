@@ -195,6 +195,65 @@ def install(hostname, dev):
             print("Already Running, INSTALL Skip.")
             return False
 
+    if check_remote_package(hostname, dev) is not True:
+        print("remote package is not ready. Please consider --copy before --install")
+        return False
+
+    pending = get_pending_version(hostname, dev)
+    if pending is not None:
+        if args.debug is True:
+            print(f"install: pendig package exist={pending}")
+        planning = get_planning_version(hostname, dev)
+        ret = compare_version(pending, planning)
+        if args.debug is True:
+            print(f"install: compare_version={ret}")
+
+        if ret == 1:
+            print(
+                "\tpending version seems newer than planning version. No need install."
+            )
+        elif ret == -1:
+            print("\tpending version seems older than planning version. NEED INSTALL.")
+        elif ret == 0:
+            print("\tpending version seems same as planning version. No need install.")
+
+        if ret == 1 or ret == 0:
+            if args.force is True:
+              pass
+            else:
+              return True
+
+        if args.dryrun:
+            print("dryrun: request system software rollback")
+        else:
+            try:
+                rpc = dev.rpc.request_package_rollback({"format": "text"})
+                str = etree.tostring(rpc, encoding="unicode")
+                if args.debug is True:
+                    print("install: rpc=", rpc, "str=", str)
+                if (
+                    str.find("Deleting bootstrap installer") >= 0  # MX
+                    or str.find("NOTICE: The 'pending' set has been removed") >= 0  # EX
+                    or str.find("will become active at next reboot") >= 0  # SRX3xx
+                    or str.find("Rollback of staged upgrade succeeded") >= 0  # SRX1500
+                ):
+                    print("install: request system software rollback successful")
+                else:
+                    print("install: request system software rollback failed")
+                    return True
+            except RpcError as e:
+                print("request system software rollback failure caused by RpcError:", e)
+                sys.exit(1)
+            except RpcTimeoutError as e:
+                print(
+                    "request system software rollback failure caused by RpcTimeoutError:",
+                    e,
+                )
+                sys.exit(1)
+            except Exception as e:
+                print(e)
+                sys.exit(1)
+
     # clear system reboot
     if args.dryrun:
         print("dryrun: clear system reboot")
@@ -206,7 +265,7 @@ def install(hostname, dev):
                 print("install: rpc=", rpc, "str=", str)
             if (
                 str.find("No shutdown/reboot scheduled.") >= 0
-                or str.find("Terminating...") > 0
+                or str.find("Terminating...") >= 0
             ):
                 print("install: clear reboot schedule successful")
             else:
@@ -436,7 +495,7 @@ def check_running_package(hostname, dev):
     """compare running version with planning version
     :returns:
        * ``True`` same(correct)
-       * * ``False`` diffrent(incorrect)
+       * ``False`` diffrent(incorrect)
     """
     if args.debug:
         print("check_running_package: start")
@@ -480,6 +539,11 @@ def compare_version(alpha, beta):
 
 
 def get_pending_version(hostname, dev):
+    """
+    :returns:
+       * ``None`` not exist
+       * ``str`` pending version string
+    """
     pending = None
     try:
         rpc = dev.rpc.get_software_information({"format": "text"})
@@ -613,11 +677,11 @@ def show_version(hostname, dev):
     print("planning version:", planning)
     ret = compare_version(curr, planning)
     if ret == 1:
-        print(" \trunning version seems newer than planning version")
+        print("\trunning version seems newer than planning version.")
     elif ret == -1:
-        print(" \trunning version seems older than planning version.")
+        print("\trunning version seems older than planning version.")
     elif ret == 0:
-        print(" \trunning version seems same as planning version")
+        print("\trunning version seems same as planning version.")
 
     # compare with pending version
     pending = get_pending_version(hostname, dev)
@@ -625,14 +689,14 @@ def show_version(hostname, dev):
     ret = compare_version(curr, pending)
     if ret == 1:
         print(
-            " \trunning version seems newer than pending version. Do you want to rollback?"
+            "\trunning version seems newer than pending version. Do you want to rollback?"
         )
     elif ret == -1:
         print(
-            " \trunning version seems older than pending version. Please plan to reboot."
+            "\trunning version seems older than pending version. Please plan to reboot."
         )
     elif ret == 0:
-        print(" \trunning version seems same as pedning version")
+        print("\trunning version seems same as pedning version")
 
     # local package check
     local = check_local_package(hostname, dev)
