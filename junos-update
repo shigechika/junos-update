@@ -615,14 +615,14 @@ def get_pending_version(hostname, dev):
                     )
                 if str is not None:
                     m = re.search(
-                        "upgrade_platform: Staging of /var/tmp/.*-(\d{2}\.\d.*\d).*\.tgz completed",
+                        "upgrade_platform: Staging of /var/tmp/.*-(\d{2}\.\d.*\d).*\.tgz completed.*$",
                         str,
                         re.MULTILINE,
                     )
                     if m is not None:
                         pending = m.group(1)
                     m = re.search(
-                        "&lt;package-result&gt;(\d)&lt;/package-result&gt;",
+                        "&lt;package-result&gt;(\d)&lt;/package-result&gt;.*$",
                         str,
                         re.MULTILINE,
                     )
