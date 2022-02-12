@@ -568,11 +568,7 @@ def get_pending_version(hostname, dev):
             )
             if m is not None:
                 pending = m.group(1)
-        elif (
-            dev.facts["personality"] == "SRX_BRANCH"
-            or dev.facts["personality"] == "SRX_MIDRANGE"
-            or dev.facts["personality"] == "SRX_HIGHEND"
-        ):
+        elif dev.facts["personality"] == "SRX_BRANCH":
             if args.debug is True:
                 print("get_pending_version: SRX series")
             # /var/sw/pkg:
@@ -598,6 +594,38 @@ def get_pending_version(hostname, dev):
                 else:
                     if args.debug is True:
                         print("get_pending_version: .forstrebootfile not exist")
+        elif (dev.facts["personality"] == "SRX_MIDRANGE"
+            or dev.facts["personality"] == "SRX_HIGHEND"
+        ):
+          # show log install
+          # upgrade_platform: Staging of /var/tmp/junos-srxentedge-x86-64-20.4R3.8-linux.tgz completed
+          # &lt;package-result&gt;0&lt;/package-result&gt;
+            try:
+                rpc = dev.rpc.get_log({'format':'text'}, filename="install")
+                str = etree.tostring(rpc, encoding="unicode")
+                if args.debug is True:
+                    print("get_pending_version: rpc=", rpc, "type(str)=", type(str), "str=", str )
+                if str is not None:
+                    m = re.search(
+                            "upgrade_platform: Staging of /var/tmp/.*-(\d{2}\.\d.*\d).*\.tgz completed",
+                            str,
+                            re.MULTILINE,
+                        )
+                    if m is not None:
+                        pending = m.group(1)
+                    m = re.search(
+                            "&lt;package-result&gt;(\d)&lt;/package-result&gt;",
+                            str,
+                            re.MULTILINE,
+                        )
+                    if m is not None:
+                        if int(m.group(1)) == 0:
+                            pass
+                        else:
+                            pending = None
+            except Exception as e:
+                print(err)
+                sys.exit(1)
         else:
             print("Unknown personality:", dev.facts)
             return True
