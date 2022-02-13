@@ -361,6 +361,7 @@ def get_model_hash(hostname, model):
         print(config.read(args.recipe), e)
         sys.exit(1)
 
+
 def get_hashcache(hostname):
     if config.has_option(hostname, "hashcache"):
         hashcache = config.get(hostname, "hashcache")
@@ -368,9 +369,11 @@ def get_hashcache(hostname):
         hashcache = None
     return hashcache
 
+
 def set_hashcache(hostname, value):
     global config
     config.set(hostname, "hashcache", value)
+
 
 def check_local_package(hostname, dev):
     """check local package
