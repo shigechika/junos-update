@@ -635,16 +635,18 @@ def get_pending_version(hostname, dev):
                         str,
                     )
                 if str is not None:
+                    # search from last <output> block
+                    start = str.rfind("&lt;output&gt;")
                     m = re.search(
-                        "upgrade_platform: Staging of /var/tmp/.*-(\d{2}\.\d.*\d).*\.tgz completed.*$",
-                        str,
+                        "upgrade_platform: Staging of /var/tmp/.*-(\d{2}\.\d.*\d).*\.tgz completed",
+                        str[start:],
                         re.MULTILINE,
                     )
                     if m is not None:
                         pending = m.group(1)
                     m = re.search(
-                        "&lt;package-result&gt;(\d)&lt;/package-result&gt;.*$",
-                        str,
+                        "&lt;package-result&gt;(\d)&lt;/package-result&gt;",
+                        str[start:],
                         re.MULTILINE,
                     )
                     if m is not None:
