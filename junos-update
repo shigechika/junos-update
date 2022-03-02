@@ -130,7 +130,10 @@ def copy(hostname, dev):
         print("dryrun: request system storage cleanup")
     else:
         try:
-            rpc = dev.rpc.request_system_storage_cleanup(no_confirm=True)
+            rpc = dev.rpc.request_system_storage_cleanup(
+                no_confirm=True, dev_timeout=60
+            )
+            # default dev_timeout is 30 seconds, but it's not enough QFX series.
             str = etree.tostring(rpc, encoding="unicode")
             if args.debug is True:
                 print("copy: request-system-storage-cleanup=", str)
