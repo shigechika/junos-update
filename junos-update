@@ -257,10 +257,11 @@ def install(hostname, dev):
                     or str.find("NOTICE: The 'pending' set has been removed") >= 0  # EX
                     or str.find("will become active at next reboot") >= 0  # SRX3xx
                     or str.find("Rollback of staged upgrade succeeded") >= 0  # SRX1500
+                    or str.find("There is NO image for ROLLBACK") >= 0  # SRX4600
                 ):
                     print("install: request system software rollback successful")
                 else:
-                    print("install: request system software rollback failed")
+                    print(f"install: request system software rollback failed: {str}")
                     return True
             except RpcError as e:
                 print("request system software rollback failure caused by RpcError:", e)
