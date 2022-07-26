@@ -576,11 +576,13 @@ def compare_version(alpha, beta):
               0 if alpha == beta
              -1 if alpha  < beta
     """
+    if args.debug:
+        print(f"compare_version: alpha={alpha}, beta={beta}.")
     if alpha is None or beta is None:
         return None
-    if LooseVersion(alpha) > LooseVersion(beta):
+    if LooseVersion(alpha.replace('-S','00')) > LooseVersion(beta.replace('-S','00')):
         return 1
-    if LooseVersion(alpha) < LooseVersion(beta):
+    if LooseVersion(alpha.replace('-S','00')) < LooseVersion(beta.replace('-S','00')):
         return -1
     return 0
 
