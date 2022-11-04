@@ -619,17 +619,22 @@ def get_pending_version(hostname, dev):
             if m is not None:
                 pending = m.group(1)
         elif dev.facts["personality"] == "SRX_BRANCH":
+            # SRX300, SRX345
             if args.debug is True:
-                print("get_pending_version: SRX series")
+                print("get_pending_version: SRX_BRANCH series")
             # /var/sw/pkg:
             # .firstrebootfile
             # junos-18.4R3-S9.2.tgz
             fs = FS(dev)
             a = fs.ls(path="/var/sw/pkg/.firstrebootfile", brief=False, followlink=True)
-            if a is not None:
+            if args.debug is True:
+                print(f'get_pending_version: ls /var/sw/pkg/.firstrebootfile result {a}')
+            if a is not None and len(a) > 0:
                 # .firstrebootfile exist
                 b = fs.ls(path="/var/sw/pkg/*.tgz", brief=False, followlink=True)
-                if b is not None:
+                if args.debug is True:
+                    print(f'get_pending_version: ls /var/sw/pkg/*.tgz result {b}')
+                if b is not None and len(b) > 0:
                     # *.tgz exist
                     m = re.search(
                         "/var/sw/pkg/.*-(\d{2}\.\d.*\d).*\.tgz",
@@ -638,16 +643,29 @@ def get_pending_version(hostname, dev):
                     )
                     if m is not None:
                         pending = m.group(1)
-                    else:
-                        if args.debug is True:
-                            print("get_pending_version: *.tgz not exist")
                 else:
                     if args.debug is True:
-                        print("get_pending_version: .forstrebootfile not exist")
+                        print("get_pending_version: /var/sw/pkg/*.tgz not exist")
+                    c = fs.cat(path="/var/sw/pkg/rollback")
+                    if args.debug is True:
+                        print(f'get_pending_version: cat /var/sw/pkg/rollback result {c}')
+                    if c is not None:
+                        # rollback exist
+                        m = re.search( "\[(.*)\]", c, re.MULTILINE,)
+                        pending = m.group(1)
+                    else:
+                        if args.debug is True:
+                            print("get_pending_version: /var/sw/pkg/rollback not exist")
+            else:
+                if args.debug is True:
+                    print("get_pending_version: .forstrebootfile not exist")
         elif (
             dev.facts["personality"] == "SRX_MIDRANGE"
             or dev.facts["personality"] == "SRX_HIGHEND"
         ):
+            # SRX1500, SRX4600
+            if args.debug is True:
+                print("get_pending_version: SRX_MIDRANGE or SRX_HIGHEND series")
             # show log install
             # upgrade_platform: Staging of /var/tmp/junos-srxentedge-x86-64-20.4R3.8-linux.tgz completed
             # &lt;package-result&gt;0&lt;/package-result&gt;
