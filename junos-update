@@ -206,8 +206,8 @@ def rollback(hostname, dev):
         print("dryrun: request system software rollback")
     else:
         try:
-            rpc = dev.rpc.request_package_rollback({"format": "text"}, dev_timeout=60)
-            # default dev_timeout is 30 seconds, but it's not enough SRX4600.
+            rpc = dev.rpc.request_package_rollback({"format": "text"}, dev_timeout=120)
+            # default dev_timeout is 30 seconds, but it's not enough SRX4600, MX5 and QFX5110.
             str = etree.tostring(rpc, encoding="unicode")
             if args.debug is True:
                 print("install: rpc=", rpc, "str=", str)
