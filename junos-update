@@ -953,6 +953,7 @@ def main():
             and args.install is False
             and args.update is False
             and args.showversion is False
+            and args.rollback is False
         ) or args.debug is True:
             pprint(dev.facts)
         if args.list_format is not None:
