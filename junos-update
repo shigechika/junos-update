@@ -964,6 +964,11 @@ def main():
             err = copy(t, dev)
             if err is True:
                 sys.exit(1)
+        # rollback
+        if args.rollback is True:
+            err = rollback(t, dev)
+            if err is True:
+                sys.exit(1)
         # install or update
         if args.install is True or args.update is True:
             err = install(t, dev)
@@ -972,11 +977,6 @@ def main():
         # show version
         if args.showversion is True:
             err = show_version(t, dev)
-            if err is True:
-                sys.exit(1)
-        # rollback
-        if args.rollback is True:
-            err = rollback(t, dev)
             if err is True:
                 sys.exit(1)
         # close
