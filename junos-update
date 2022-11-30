@@ -653,20 +653,23 @@ def get_pending_version(hostname, dev):
                 else:
                     if args.debug is True:
                         print("get_pending_version: /var/sw/pkg/*.tgz not exist")
-                c = fs.cat(path="/var/sw/pkg/rollback")
-                if args.debug is True:
-                    print(f"get_pending_version: cat /var/sw/pkg/rollback result {c}")
-                if c is not None:
-                    # rollback exist
-                    m = re.search(
-                        "\[(.*)\]",
-                        c,
-                        re.MULTILINE,
-                    )
-                    pending = m.group(1)
-                else:
+                if pending is None:
+                    c = fs.cat(path="/var/sw/pkg/rollback")
                     if args.debug is True:
-                        print("get_pending_version: /var/sw/pkg/rollback not exist")
+                        print(
+                            f"get_pending_version: cat /var/sw/pkg/rollback result {c}"
+                        )
+                    if c is not None:
+                        # rollback exist
+                        m = re.search(
+                            "\[(.*)\]",
+                            c,
+                            re.MULTILINE,
+                        )
+                        pending = m.group(1)
+                    else:
+                        if args.debug is True:
+                            print("get_pending_version: /var/sw/pkg/rollback not exist")
             else:
                 if args.debug is True:
                     print("get_pending_version: .forstrebootfile not exist")
