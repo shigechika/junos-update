@@ -210,7 +210,7 @@ def rollback(hostname, dev):
             # default dev_timeout is 30 seconds, but it's not enough SRX4600, MX5 and QFX5110.
             str = etree.tostring(rpc, encoding="unicode")
             if args.debug:
-                print("install: rpc=", rpc, "str=", str)
+                print("rollback: rpc=", rpc, "str=", str)
             if (
                 str.find("Deleting bootstrap installer") >= 0  # MX
                 or str.find("NOTICE: The 'pending' set has been removed") >= 0  # EX
@@ -218,9 +218,9 @@ def rollback(hostname, dev):
                 or str.find("Rollback of staged upgrade succeeded") >= 0  # SRX1500
                 or str.find("There is NO image for ROLLBACK") >= 0  # SRX4600
             ):
-                print("install: request system software rollback successful")
+                print("rollback: request system software rollback successful")
             else:
-                print(f"install: request system software rollback failed: {str}")
+                print(f"rollback: request system software rollback failed: {str}")
                 return True
         except RpcError as e:
             print("request system software rollback failure caused by RpcError:", e)
