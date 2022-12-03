@@ -218,9 +218,9 @@ def rollback(hostname, dev):
                 or str.find("Rollback of staged upgrade succeeded") >= 0  # SRX1500
                 or str.find("There is NO image for ROLLBACK") >= 0  # SRX4600
             ):
-                print("rollback: request system software rollback successful")
+                print(f"rollback: request system software rollback successful:\n{str}")
             else:
-                print(f"rollback: request system software rollback failed: {str}")
+                print(f"rollback: request system software rollback failed:\n{str}")
                 return True
         except RpcError as e:
             print("request system software rollback failure caused by RpcError:", e)
@@ -624,53 +624,34 @@ def get_pending_version(hostname, dev):
             if m is not None:
                 pending = m.group(1)
         elif dev.facts["personality"] == "SRX_BRANCH":
-            # SRX300, SRX345
+            # Dual Partition - SRX300, SRX345
             if args.debug:
                 print("get_pending_version: SRX_BRANCH series")
-            # /var/sw/pkg:
-            # .firstrebootfile
-            # junos-18.4R3-S9.2.tgz
-            fs = FS(dev)
-            a = fs.ls(path="/var/sw/pkg/.firstrebootfile", brief=False, followlink=True)
+            xml = dev.rpc.get_snapshot_information(media="internal")
             if args.debug:
-                print(
-                    f"get_pending_version: ls /var/sw/pkg/.firstrebootfile result {a}"
-                )
-            if a is not None and len(a) > 0:
-                # .firstrebootfile exist
-                b = fs.ls(path="/var/sw/pkg/*.tgz", brief=False, followlink=True)
+                print(f"get_snapshot_information: xml={etree.dump(xml)}")
+            primary = False
+            for i in range(len(xml)):
                 if args.debug:
-                    print(f"get_pending_version: ls /var/sw/pkg/*.tgz result {b}")
-                if b is not None and len(b) > 0:
-                    # *.tgz exist
-                    m = re.search(
-                        "/var/sw/pkg/.*-(\d{2}\.\d.*\d).*\.tgz",
-                        b.get("path"),
-                        re.MULTILINE,
+                    print(
+                        f"get_snapshot_information: i={i}, tag={xml[i].tag}, text={xml[i].text}"
                     )
-                    if m is not None:
-                        pending = m.group(1)
-                else:
+                if (
+                    xml[i].tag == "snapshot-medium"
+                    and re.match(".*primary", xml[i].text, re.MULTILINE | re.DOTALL)
+                    is not None
+                ):
                     if args.debug:
-                        print("get_pending_version: /var/sw/pkg/*.tgz not exist")
-                # rollback overwrites any *.tgz
-                c = fs.cat(path="/var/sw/pkg/rollback")
-                if args.debug:
-                    print(f"get_pending_version: cat /var/sw/pkg/rollback result {c}")
-                if c is not None:
-                    # rollback exist
-                    m = re.search(
-                        "\[(.*)\]",
-                        c,
-                        re.MULTILINE,
-                    )
-                    pending = m.group(1)
-                else:
-                    if args.debug:
-                        print("get_pending_version: /var/sw/pkg/rollback not exist")
-            else:
-                if args.debug:
-                    print("get_pending_version: .forstrebootfile not exist")
+                        print("primary find")
+                    primary = True
+                if (
+                    primary
+                    and xml[i].tag == "software-version"
+                    and xml[i][0].tag == "package"
+                    and xml[i][0][1].tag == "package-version"
+                ):
+                    pending = xml[i][0][1].text.strip()
+                    break
         elif (
             dev.facts["personality"] == "SRX_MIDRANGE"
             or dev.facts["personality"] == "SRX_HIGHEND"
