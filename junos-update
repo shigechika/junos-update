@@ -273,13 +273,17 @@ def install(hostname, dev):
 
         if ret == 1 or ret == 0:
             if args.force:
+                # force INSTALL
                 pass
             else:
                 return False
 
         ret = rollback(hostname, dev)
         if ret:
-            return True
+            if args.force:
+                pass
+            else:
+                return True
 
     # clear system reboot
     if args.dryrun:
@@ -947,11 +951,7 @@ def main():
         if args.rollback:
             err = rollback(t, dev)
             if err:
-                if args.install or args.update:
-                    # ignore --rollback err before --update
-                    pass
-                else:
-                    sys.exit(1)
+                sys.exit(1)
         # install or update
         if args.install or args.update:
             err = install(t, dev)
