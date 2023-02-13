@@ -128,34 +128,19 @@ class rsi:
         )
         try:
             dev.open()
-        except ConnectAuthError as e:
-            print("Authentication credentials fail to login: {0}".format(e))
-            dev = None
-        except ConnectRefusedError as e:
-            print("NETCONF Connection refused: {0}".format(e))
-            dev = None
-        except ConnectTimeoutError as e:
-            print("Connection timeout: {0}".format(e))
-            dev = None
-        except ConnectError as e:
-            print("Cannot connect to device: {0}".format(e))
-            dev = None
-        except ConnectUnknownHostError as e:
-            print("Unknown Host: {0}".format(e))
-            dev = None
         except Exception as e:
             print(e)
             dev = None
         if self.args.debug:
-            print("dev=", dev)
+            print(f"dev = {dev}")
         if self.args.debug:
             print("connect: end", flush=True)
         return dev
 
     def get_support_information(self, dev):
         try:
-            if dev.facts["personality"] == "SRX_BRANCH":
-                # SRX3xx series RSI is VERY SLOW
+            if dev.facts["personality"] == "SRX_BRANCH" or len(dev.facts["model_info"]) >= 2:
+                # SRX3xx series and Virtual Chassis are VERY SLOW
                 timeout = 1200
             else:
                 timeout = 600
@@ -165,10 +150,6 @@ class rsi:
                 {"format": "text"}, dev_timeout=timeout
             )
             return rpc
-        except RpcError as e:
-            print("Show version failure caused by RpcError:", e)
-        except RpcTimeoutError as e:
-            print("Show version failure caused by RpcTimeoutError:", e)
         except Exception as e:
             print(e)
         return None
@@ -219,7 +200,7 @@ class rsi:
         # request support infomation
         rpc = self.get_support_information(dev)
         if rpc is None:
-            return 1
+            return 2
         str = etree.tostring(rpc, encoding="unicode", method="text")
         # if self.args.debug:
         #    print(f"rsi : {str}", flush=True)
@@ -238,7 +219,7 @@ class rsi:
             self.exec_scf_and_rsi(target)
 
     def rsi_parallel(self):
-        with futures.ThreadPoolExecutor(max_workers=10) as executor:
+        with futures.ThreadPoolExecutor(max_workers=20) as executor:
             future_to_target = {
                 executor.submit(self.exec_scf_and_rsi, target): target
                 for target in self.targets
