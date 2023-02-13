@@ -1,5 +1,7 @@
 # Hi-Speeed Collection of JUNOS Request Support Information
 
+
+from concurrent import futures
 from distutils.version import LooseVersion
 from jnpr.junos import Device
 from jnpr.junos.exception import (
@@ -70,7 +72,7 @@ class rsi:
             help="show running/planning/pending version and reboot schedule",
         )
         parser.add_argument("-d", "--debug", action="store_true", help="for debug")
-        parser.add_argument("-V", action="version", version="%(prog)s " + version)
+        parser.add_argument("-V", action="version", version="%(prog)s " + self.version)
         self.args = parser.parse_args()
 
     def parse_config(self):
@@ -87,31 +89,31 @@ class rsi:
             if host is None:
                 # host is [section] name
                 self.config.set(section, "host", section)
-            if self.args.debug:
-                for key in self.config[section]:
-                    print(f"{section} > {key} : {self.config[section][key]}")
+            # if self.args.debug:
+            #    for key in self.config[section]:
+            #        print(f"{section} > {key} : {self.config[section][key]}")
 
     def get_targets(self):
         self.targets = []
         if len(self.args.specialhosts) == 0:
             for i in self.config.sections():
                 tmp = self.config.get(i, "host")
-                if self.args.debug:
-                    print(i, tmp)
+                #if self.args.debug:
+                #    print(i, tmp)
                 if tmp is not None:
                     self.targets.append(i)
                 else:
-                    print(i, "is not found in", args.recipe)
+                    print(i, "is not found in", self.args.recipe)
                     sys.exit(1)
         else:
             for i in self.args.specialhosts:
                 if self.config.has_section(i):
                     tmp = self.config.get(i, "host")
                 else:
-                    print(i, "is not found in", args.recipe)
+                    print(i, "is not found in", self.args.recipe)
                     sys.exit(1)
-                if self.args.debug:
-                    print(i, tmp)
+                #if self.args.debug:
+                #    print(i, tmp)
                 self.targets.append(i)
 
     def connect(self, hostname):
@@ -124,39 +126,31 @@ class rsi:
             passwd=self.config.get(hostname, "pw"),
             ssh_private_key_file=self.config.get(hostname, "sshkey"),
         )
-        err = None
         try:
             dev.open()
-            err = False
         except ConnectAuthError as e:
             print("Authentication credentials fail to login: {0}".format(e))
             dev = None
-            err = True
         except ConnectRefusedError as e:
             print("NETCONF Connection refused: {0}".format(e))
             dev = None
-            err = True
         except ConnectTimeoutError as e:
             print("Connection timeout: {0}".format(e))
             dev = None
-            err = True
         except ConnectError as e:
             print("Cannot connect to device: {0}".format(e))
             dev = None
-            err = True
         except ConnectUnknownHostError as e:
             print("Unknown Host: {0}".format(e))
             dev = None
-            err = True
         except Exception as e:
             print(e)
             dev = None
-            err = True
         if self.args.debug:
-            print("connect: err=", err, "dev=", dev)
+            print("dev=", dev)
         if self.args.debug:
             print("connect: end", flush=True)
-        return err, dev
+        return dev
 
     def get_support_information(self, dev):
         try:
@@ -173,19 +167,17 @@ class rsi:
             return rpc
         except RpcError as e:
             print("Show version failure caused by RpcError:", e)
-            sys.exit(1)
         except RpcTimeoutError as e:
             print("Show version failure caused by RpcTimeoutError:", e)
-            sys.exit(1)
         except Exception as e:
-            print(err)
-            sys.exit(1)
+            print(e)
+        return None
 
     def rsi_target(self, hostname):
         if self.args.debug:
             print("rsi_target: start", flush=True)
-        err, dev = self.connect(hostname)
-        if err or dev is None:
+        dev = self.connect(hostname)
+        if dev is None:
             sys.exit(1)
         rpc = self.get_support_information(dev)
         str = etree.tostring(rpc, encoding="unicode", method="text")
@@ -195,13 +187,73 @@ class rsi:
             print("rsi_target: end", flush=True)
         return str
 
-    def rsi_targets(self):
+    def config_target(self, hostname):
+        if self.args.debug:
+            print("config_target: start", flush=True)
+        dev = self.connect(hostname)
+        if dev is None:
+            sys.exit(1)
+        str = dev.cli("show configuration | display set")
+        if self.args.debug:
+            print(f"config_target : {str}")
+        if self.args.debug:
+            print("config_target: end", flush=True)
+        return str
+
+    def exec_scf_and_rsi(self, hostname):
+        if self.args.debug:
+            print(f"exec_scf_and_rsi: {hostname} start", flush=True)
+        dev = self.connect(hostname)
+        if dev is None:
+            return 1
+        # config
+        str = dev.cli("show configuration | display set")
+        # if self.args.debug:
+        #    print(f"scf : {str}", flush=True)
+        with open(
+            f"{self.config.get(hostname, 'RSI_DIR')}{hostname}.SCF", mode="w"
+        ) as f:
+            f.write(str)
+        if self.args.debug:
+            print(f"exec_scf_and_rsi: {hostname}.SCF done", flush=True)
+        # request support infomation
+        rpc = self.get_support_information(dev)
+        if rpc is None:
+            return 1
+        str = etree.tostring(rpc, encoding="unicode", method="text")
+        # if self.args.debug:
+        #    print(f"rsi : {str}", flush=True)
+        with open(
+            f"{self.config.get(hostname, 'RSI_DIR')}{hostname}.RSI", mode="w"
+        ) as f:
+            f.write(str)
+        if self.args.debug:
+            print(f"exec_scf_and_rsi: {hostname}.RSI done", flush=True)
+        if self.args.debug:
+            print(f"exec_scf_and_rsi: {hostname} end", flush=True)
+        return 0
+
+    def rsi_serial(self):
         for target in self.targets:
-            str = self.rsi_target(target)
-            with open(f"{target}.RSI", mode="w") as f:
-                f.write(str)
+            self.exec_scf_and_rsi(target)
+
+    def rsi_parallel(self):
+        with futures.ThreadPoolExecutor(max_workers=10) as executor:
+            future_to_target = {
+                executor.submit(self.exec_scf_and_rsi, target): target
+                for target in self.targets
+            }
+            for future in futures.as_completed(future_to_target):
+                target = future_to_target[future]
+                try:
+                    ret = future.result()
+                except Exception as e:
+                    print(f"{target} generated an exception: {e}")
+                else:
+                    print(f"{target} returns {ret}")
 
 
 if __name__ == "__main__":
     rsi = rsi()
-    rsi.rsi_targets()
+    # rsi.rsi_serial()
+    rsi.rsi_parallel()
