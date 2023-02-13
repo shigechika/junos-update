@@ -139,13 +139,16 @@ class rsi:
 
     def get_support_information(self, dev):
         try:
-            if dev.facts["personality"] == "SRX_BRANCH" or len(dev.facts["model_info"]) >= 2:
-                # SRX3xx series and Virtual Chassis are VERY SLOW
+            if dev.facts["personality"] == "SRX_BRANCH":
+                # SRX3xx series is SLOW
                 timeout = 1200
+            elif len(dev.facts["model_info"]) >= 2:
+                # Virtual Chassis is VERY SLOW
+                timeout = 1800
             else:
                 timeout = 600
             if self.args.debug:
-                print(f"get_support_information: timeout={timeout}", flush=True)
+                print(f"get_support_information: {dev.facts['hostname']} timeout={timeout}", flush=True)
             rpc = dev.rpc.get_support_information(
                 {"format": "text"}, dev_timeout=timeout
             )
