@@ -1,5 +1,21 @@
-# Hi-Speeed Collection of JUNOS Request Support Information
+#!/usr/bin/env python3
+# -*- mode: python; python-indent-offset: 4 -*-
+#
+#   Copyright ©︎2023 AIKAWA Shigechika
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
 
+# Hi-Speeed Collection of JUNOS Request Support Information
 
 from concurrent import futures
 from distutils.version import LooseVersion
@@ -99,7 +115,7 @@ class rsi:
         if len(self.args.specialhosts) == 0:
             for i in self.config.sections():
                 tmp = self.config.get(i, "host")
-                #if self.args.debug:
+                # if self.args.debug:
                 #    print(i, tmp)
                 if tmp is not None:
                     self.targets.append(i)
@@ -113,7 +129,7 @@ class rsi:
                 else:
                     print(i, "is not found in", self.args.recipe)
                     sys.exit(1)
-                #if self.args.debug:
+                # if self.args.debug:
                 #    print(i, tmp)
                 self.targets.append(i)
 
@@ -149,7 +165,10 @@ class rsi:
             else:
                 timeout = 600
             if self.args.debug:
-                print(f"get_support_information: {dev.facts['hostname']} timeout={timeout}", flush=True)
+                print(
+                    f"get_support_information: {dev.facts['hostname']} timeout={timeout}",
+                    flush=True,
+                )
             rpc = dev.rpc.get_support_information(
                 {"format": "text"}, dev_timeout=timeout
             )
