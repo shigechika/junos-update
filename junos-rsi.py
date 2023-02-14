@@ -22,6 +22,7 @@ from pprint import pprint
 import argparse
 import configparser
 import datetime
+import os
 import re
 import sys
 
@@ -48,7 +49,7 @@ class rsi:
         )
         parser.add_argument(
             "--recipe",
-            default="junos.ini",
+            default=f"{os.environ['HOME']}/.junos.ini",
             type=str,
             help="junos recipe filename (default: %(default)s)",
         )
