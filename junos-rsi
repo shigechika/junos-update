@@ -146,11 +146,11 @@ class rsi:
             print("connect: start", flush=True)
         dev = Device(
             host=self.config.get(hostname, "host"),
-            port=self.config.get(hostname, "port"),
+            port=self.config.get(hostname, "port", fallback=830),
             user=self.config.get(hostname, "id"),
             passwd=self.config.get(hostname, "pw"),
             ssh_private_key_file=self.config.get(hostname, "sshkey"),
-            huge_tree=self.config.get(hostname, "huge_tree"),
+            huge_tree=self.config.get(hostname, "huge_tree", fallback=False),
         )
         try:
             dev.open()
