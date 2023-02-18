@@ -183,12 +183,14 @@ class rsi:
                     f"get_support_information: {dev.facts['hostname']} timeout={timeout}",
                     flush=True,
                 )
-            if dev.facts['srx_cluster'] == "True":
+            if dev.facts["srx_cluster"] == "True":
                 rpc = dev.rpc.get_support_information(
-                    {"format": "text"}, dev_timeout=timeout, node="primary")
+                    {"format": "text"}, dev_timeout=timeout, node="primary"
+                )
             else:
                 rpc = dev.rpc.get_support_information(
-                    {"format": "text"}, dev_timeout=timeout)
+                    {"format": "text"}, dev_timeout=timeout
+                )
             return rpc
         except Exception as e:
             print(e)
