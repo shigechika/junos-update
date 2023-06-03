@@ -47,6 +47,7 @@ from jnpr.junos.utils.sw import SW
 from lxml import etree
 from ncclient.operations.errors import TimeoutExpiredError
 from pprint import pprint
+from zappix.sender import Sender
 import argparse
 import configparser
 import datetime
@@ -54,8 +55,7 @@ import os
 import re
 import sys
 import json
-
-
+ 
 class srx:
     version = "0.0"
 
@@ -289,7 +289,7 @@ class srx:
                     print(f"{target} returns {ret}")
 
     def get_nat_usage(self):
-        dev = self.connect("srx")
+        dev = self.connect(self.config.get('srx-nat-usage', 'srx'))
         if dev is None:
             return 1
         self.nat_usage = dev.rpc.retrieve_source_nat_pool_resource_usage(
@@ -310,20 +310,66 @@ class srx:
             #print(f"name:{name}\r")
             buff=f"name:{name}\n"
             for node in range(len(self.nat_usage["multi-routing-engine-results"][0]["multi-routing-engine-item"])):
-                usage = self.nat_usage["multi-routing-engine-results"][0]["multi-routing-engine-item"][0]["source-resource-usage-pool-information"][0]["resource-usage-entry"][pool]["resource-usage-total-usage"][0]["data"]
+                usage = self.nat_usage["multi-routing-engine-results"][0]["multi-routing-engine-item"][node]["source-resource-usage-pool-information"][0]["resource-usage-entry"][pool]["resource-usage-total-usage"][0]["data"]
                 usage_val = int(usage.replace("%", ""))
-                peak_usage = self.nat_usage["multi-routing-engine-results"][0]["multi-routing-engine-item"][0]["source-resource-usage-pool-information"][0]["resource-usage-entry"][pool]["resource-usage-peak-usage"][0]["data"]
+                peak_usage = self.nat_usage["multi-routing-engine-results"][0]["multi-routing-engine-item"][node]["source-resource-usage-pool-information"][0]["resource-usage-entry"][pool]["resource-usage-peak-usage"][0]["data"]
                 peak_usage_val = int(peak_usage.replace("%", ""))
-                peak_datetime = self.nat_usage["multi-routing-engine-results"][0]["multi-routing-engine-item"][0]["source-resource-usage-pool-information"][0]["resource-usage-entry"][pool]["resource-usage-peak-date-time"][0]["data"]
-                if peak_usage_val > 90:
-                    print(buff, end="")
-                    print(f"\tnode:{node} usage:{usage} peak_usage:{peak_usage} peak_datetime:{peak_datetime}")
-                    buff=""
+                peak_datetime = self.nat_usage["multi-routing-engine-results"][0]["multi-routing-engine-item"][node]["source-resource-usage-pool-information"][0]["resource-usage-entry"][pool]["resource-usage-peak-date-time"][0]["data"]
+                #if usage_val > 90 or peak_usage_val > 90:
+                print(buff, end="")
+                print(f"\tnode:{node} usage:{usage} peak_usage:{peak_usage} peak_datetime:{peak_datetime}")
+                buff=""
 
+    def send_zabbix(self):
+        sender = Sender(self.config.get('srx-nat-usage', 'zabbix'))
+        for node in range(len(self.nat_usage["multi-routing-engine-results"][0]["multi-routing-engine-item"])):
+            nodename = self.nat_usage["multi-routing-engine-results"][0]["multi-routing-engine-item"][node]["re-name"][0]["data"]
+            for pool in range(len(self.nat_usage["multi-routing-engine-results"][0]["multi-routing-engine-item"][node]["source-resource-usage-pool-information"][0]["resource-usage-entry"])):
+                name = self.nat_usage["multi-routing-engine-results"][0]["multi-routing-engine-item"][node]["source-resource-usage-pool-information"][0]["resource-usage-entry"][pool]["resource-usage-pool-name"][0]["data"]
+                m = re.search('^EDUROAM-SNAT-(\w+)-pool', name)
+                if m is not None:
+                    #eduroam
+                    host = f"{m.group(1)}-nat".lower()
+                    key = f"{name}.{nodename}"
+                else:
+                    m = re.search('^(\w+)-SNAT-POOL-\d+', name)
+                    if m is not None:
+                        #campus
+                        host = f"{m.group(1)}-nat".lower()
+                        key = f"{name}[{node}]"
+                    else:
+                        print(name)
+                        raise
+                usage = self.nat_usage["multi-routing-engine-results"][0]["multi-routing-engine-item"][node]["source-resource-usage-pool-information"][0]["resource-usage-entry"][pool]["resource-usage-total-usage"][0]["data"]
+                usage_val = int(usage.replace("%", ""))
+                print(host, key + ".usage", usage_val, flush=True)
+                ret = sender.send_value(host=host, key=key + ".usage", value=usage_val)
+                if ret.failed == 1:
+                    print(ret, flush=True)
+                    raise
+                #sender.send_value(host, key, usage_val)
+                peak_usage = self.nat_usage["multi-routing-engine-results"][0]["multi-routing-engine-item"][node]["source-resource-usage-pool-information"][0]["resource-usage-entry"][pool]["resource-usage-peak-usage"][0]["data"]
+                peak_usage_val = int(peak_usage.replace("%", ""))
+                print(host, key + ".peak_usage" , peak_usage_val, flush=True)
+                ret = sender.send_value(host=host, key=key + ".peak_usage" , value=peak_usage_val)
+                if ret.failed == 1:
+                    print(ret, flush=True)
+                    raise
+                print(ret, flush=True)
+                peak_datetime = self.nat_usage["multi-routing-engine-results"][0]["multi-routing-engine-item"][node]["source-resource-usage-pool-information"][0]["resource-usage-entry"][pool]["resource-usage-peak-date-time"][0]["data"]
+                print(host, key + ".peak_datetime", peak_datetime, flush=True)
+                ret = sender.send_value(host, key + ".peak_datetime", peak_datetime)
+                if ret.failed == 1:
+                    print(ret, flush=True)
+                    raise
+                print(ret, flush=True)
+            print()
+        
 
 if __name__ == "__main__":
     srx = srx()
-    srx.get_nat_usage()
-    #srx.load_nat_usage()
-    srx.show_nat_usage()
+    #srx.get_nat_usage()
+    srx.load_nat_usage()
+    #srx.show_nat_usage()
+    srx.send_zabbix()
     #srx.save_nat_usage()
