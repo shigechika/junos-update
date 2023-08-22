@@ -55,9 +55,18 @@ import os
 import re
 import sys
 import json
+import zapi
  
 class srx:
     version = "0.0"
+    usage_dict = {
+        "resource-usage-peak-usage":"peak_usage",
+        "resource-usage-peak-date-time": "peak_datetime",
+        "resource-usage-total-address": "address",
+        "resource-usage-total-used": "used",
+        "resource-usage-total-total": "total",
+        "resource-usage-total-usage": "usage",
+        }
 
     def __init__(self):
         self.parse_arg()
@@ -338,8 +347,21 @@ class srx:
                         host = f"{m.group(1)}-nat".lower()
                         key = f"{name}[{node}]"
                     else:
-                        print(name)
+                        print(f"Unknown hostname rule : {name}")
                         raise
+                hostid = zapi.get_hostid_by_host(host)
+                for i, j in self.usage_dict.item():
+                    usage = self.nat_usage["multi-routing-engine-results"][0]["multi-routing-engine-item"][node]["source-resource-usage-pool-information"][0]["resource-usage-entry"][pool][i][0]["data"]
+                    if usage.endswith("usage"):
+                        val = int(usage.replace("%", ""))
+                    else:
+                        val = usage
+                    print(host, key + "." + j, val, flush=True)
+                    ret = sender.send_value(host=host, key=key + "." + j, value=val)
+                    if ret.failed == 1:
+                        print(ret, flush=True)
+                        raise
+                    
                 usage = self.nat_usage["multi-routing-engine-results"][0]["multi-routing-engine-item"][node]["source-resource-usage-pool-information"][0]["resource-usage-entry"][pool]["resource-usage-total-usage"][0]["data"]
                 usage_val = int(usage.replace("%", ""))
                 print(host, key + ".usage", usage_val, flush=True)
