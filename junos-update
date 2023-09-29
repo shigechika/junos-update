@@ -15,7 +15,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-from distutils.version import LooseVersion
+from looseversion import LooseVersion
 from jnpr.junos import Device
 from jnpr.junos.exception import (
     ConnectAuthError,
