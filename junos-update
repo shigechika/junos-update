@@ -949,9 +949,17 @@ def main():
                 sys.exit(1)
         # rollback
         if args.rollback:
-            err = rollback(t, dev)
-            if err:
-                sys.exit(1)
+            pending = get_pending_version(t, dev)
+            print(f"rollback: pending version is {pending}")
+            if pending is None:
+                print("rollback: skip")
+            else:
+                err = rollback(t, dev)
+                if err:
+                    sys.exit(err)
+                else:
+                    if args.dryrun is False:
+                        print("rollback: successful")
         # install or update
         if args.install or args.update:
             err = install(t, dev)
