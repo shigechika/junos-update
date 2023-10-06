@@ -842,6 +842,11 @@ class update:
             help="junos recipe filename (default: %(default)s)",
         )
         parser.add_argument(
+            "--reboot",
+            type=str,
+            help="set reboot schedule with datetime",
+        )
+        parser.add_argument(
             "--list",
             "--short",
             "-ls",
