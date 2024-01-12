@@ -236,7 +236,7 @@ class rsi:
         with open(
             f"{self.config.get(hostname, 'RSI_DIR')}{hostname}.SCF", mode="w"
         ) as f:
-            f.write(str)
+            f.write(str.strip())
         if self.args.debug:
             print(f"exec_scf_and_rsi: {hostname}.SCF done", flush=True)
         # request support infomation
@@ -249,7 +249,7 @@ class rsi:
         with open(
             f"{self.config.get(hostname, 'RSI_DIR')}{hostname}.RSI", mode="w"
         ) as f:
-            f.write(str)
+            f.write(str.strip())
         if self.args.debug:
             print(f"exec_scf_and_rsi: {hostname}.RSI done", flush=True)
         if self.args.debug:
