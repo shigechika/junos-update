@@ -320,7 +320,7 @@ def install(hostname, dev):
         try:
             ret = cu.rescue("save")
             if ret:
-                print("install: rescue config save suecessful")
+                print("install: rescue config save successful")
             else:
                 print("install: rescue config save failed")
                 return True
