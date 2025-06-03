@@ -558,7 +558,7 @@ def check_running_package(hostname, dev):
         print("check_running_package: start")
     ret = None
     ver = dev.facts["version"]
-    rever = re.sub("\.", "\\.", ver)
+    rever = re.sub(r"\.", r"\\.", ver)
     if args.debug:
         print("check_running_package: ver", ver)
         print("check_running_package: rever", rever)
@@ -615,7 +615,7 @@ def get_pending_version(hostname, dev):
             if args.debug:
                 print("get_pending_version: EX/QFX series")
             # Pending: 18.4R3-S10
-            m = re.search("^Pending:\s(.*)$", str, re.MULTILINE)
+            m = re.search(r"^Pending:\s(.*)$", str, re.MULTILINE)
             if m is not None:
                 pending = m.group(1)
         elif dev.facts["personality"] == "MX":
@@ -623,7 +623,7 @@ def get_pending_version(hostname, dev):
                 print("get_pending_version: MX series")
             # JUNOS Installation Software [18.4R3-S10]
             m = re.search(
-                "^JUNOS\sInstallation\sSoftware\s\[(.*)\]$", str, re.MULTILINE
+                r"^JUNOS\sInstallation\sSoftware\s\[(.*)\]$", str, re.MULTILINE
             )
             if m is not None:
                 pending = m.group(1)
@@ -682,14 +682,14 @@ def get_pending_version(hostname, dev):
                     # search from last <output> block
                     start = str.rfind("&lt;output&gt;")
                     m = re.search(
-                        "upgrade_platform: Staging of /var/tmp/.*-(\d{2}\.\d.*\d).*\.tgz completed",
+                        r"upgrade_platform: Staging of /var/tmp/.*-(\d{2}\.\d.*\d).*\.tgz completed",
                         str[start:],
                         re.MULTILINE,
                     )
                     if m is not None:
                         pending = m.group(1)
                     m = re.search(
-                        "&lt;package-result&gt;(\d)&lt;/package-result&gt;",
+                        r"&lt;package-result&gt;(\d)&lt;/package-result&gt;",
                         str[start:],
                         re.MULTILINE,
                     )
@@ -719,7 +719,7 @@ def get_pending_version(hostname, dev):
 def get_planning_version(hostname, dev):
     planning = None
     f = get_model_file(hostname, dev.facts["model"])
-    m = re.search(".*-(\d{2}\.\d.*\d).*\.tgz", f)
+    m = re.search(r".*-(\d{2}\.\d.*\d).*\.tgz", f)
     if m is not None:
         planning = m.group(1)
     else:
@@ -750,7 +750,7 @@ def get_reboot_infomation(hostname, dev):
     if args.debug:
         print(str)
     m = re.search(
-        "((halt|shutdown|reboot)\srequested\sby\s.*\sat\s(.*\d)|No\sshutdown\/reboot\sscheduled\.)",
+        r"((halt|shutdown|reboot)\srequested\sby\s.*\sat\s(.*\d)|No\sshutdown\/reboot\sscheduled\.)",
         str,
         re.MULTILINE,
     )

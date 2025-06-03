@@ -29,7 +29,15 @@ optional arguments:
 default action is show device facts
 ```
 
-# PyEZ
+# Install
+
+```shell
+python3 -m venv venv
+venv/bin/activate
+pip3 install -r requirements.txt
+```
+
+## PyEZ
 
 - requires PyEZ [https://www.juniper.net/documentation/product/us/en/junos-pyez]
 
@@ -39,7 +47,7 @@ default action is show device facts
 
 - pip3
 
-Ubuntu 21
+Ubuntu
 ```
 sudo apt install python3-pip
 ```
