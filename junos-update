@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- mode: python; python-indent-offset: 4 -*-
 #
-#   Copyright ©︎2022 AIKAWA Shigechika
+#   Copyright ©︎2022-2025 AIKAWA Shigechika
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -37,6 +37,11 @@ import configparser
 import datetime
 import re
 import sys
+from logging import getLogger, config
+import logging
+
+config.fileConfig("logging.ini")
+logger = logging.getLogger(__name__)
 
 config = None
 args = None
@@ -237,6 +242,35 @@ def rollback(hostname, dev):
     return False
 
 
+def clear_reboot(dev) -> bool:
+    # clear system reboot
+    if args.dryrun:
+        logger.debug("dryrun: clear system reboot")
+    else:
+        try:
+            rpc = dev.rpc.clear_reboot({"format": "text"})
+            str = etree.tostring(rpc, encoding="unicode")
+            logger.debug("{rpc=} {str=}")
+            if (
+                str.find("No shutdown/reboot scheduled.") >= 0
+                or str.find("Terminating...") >= 0
+            ):
+                logger.info("clear reboot schedule successful")
+            else:
+                logger.info("clear reboot schedule failed")
+                return True
+        except RpcError as e:
+            logger.error(f"Clear reboot failure caused by RpcError: {e}")
+            sys.exit(1)
+        except RpcTimeoutError as e:
+            logger.error(f"Clear reboot failure caused by RpcTimeoutError: {e}")
+            sys.exit(1)
+        except Exception as e:
+            logger.error(e)
+            sys.exit(1)
+    return False
+    
+    
 def install(hostname, dev):
     if args.debug:
         print("install: start")
@@ -285,32 +319,8 @@ def install(hostname, dev):
             else:
                 return True
 
-    # clear system reboot
-    if args.dryrun:
-        print("dryrun: clear system reboot")
-    else:
-        try:
-            rpc = dev.rpc.clear_reboot({"format": "text"})
-            str = etree.tostring(rpc, encoding="unicode")
-            if args.debug:
-                print("install: rpc=", rpc, "str=", str)
-            if (
-                str.find("No shutdown/reboot scheduled.") >= 0
-                or str.find("Terminating...") >= 0
-            ):
-                print("install: clear reboot schedule successful")
-            else:
-                print("install: clear reboot schedule failed")
-                return True
-        except RpcError as e:
-            print("Clear reboot failure caused by RpcError:", e)
-            sys.exit(1)
-        except RpcTimeoutError as e:
-            print("Clear reboot failure caused by RpcTimeoutError:", e)
-            sys.exit(1)
-        except Exception as e:
-            print(e)
-            sys.exit(1)
+    if clear_reboot(dev):
+        return True
 
     # request system configuration rescue save
     if args.dryrun:
@@ -817,6 +827,61 @@ def show_version(hostname, dev):
     return False
 
 
+def reboot(hostname : str , dev, reboot_dt : datetime.datetime):
+    logger.debug(f"{reboot_dt=}")
+    try:
+        dev.open()
+    except ConnectError as err:
+        logger.error(f"{err=}")
+        return 1
+    try:
+        rpc = dev.rpc.get_reboot_information({"format": "text"})
+    except ConnectError as err:
+        logger.error(f"{err=}")
+        return 2
+    str = etree.tostring(rpc, encoding="unicode")
+    logger.debug(f"{str=}")
+    if str.find("No shutdown/reboot scheduled.") >= 0:
+        #if re.match(r"\S+-rt2\.nihon-u\.ac\.jp$", hostname) is not None:
+        #    # *-rt2 is reboot after about 30 minutes later
+        #    reboot_dt = reboot_dt + timedelta(minutes=30)
+        pass
+    else:
+        logger.info("ANY SHUTDWON/REBOOT SCHEDULE EXISTS")
+        match = re.search(r'^(\w+) requested by (\w+) at (.*)$', str, re.MULTILINE)
+        if len(match.groups()) == 3:
+            dt = datetime.datetime.strptime(match.group(3), '%a %b %d %H:%M:%S %Y')
+            logger.info(f"{dt=}")
+            if args.force:
+                logger.info("force clear reboot")
+                if clear_reboot(dev):
+                    return 3
+            else:
+                logger.debug("skip clear reboot")
+    # reboot
+    at_str = reboot_dt.strftime("%y%m%d%H%M")
+    sw = SW(dev)
+    try:
+        if args.dryrun:
+            msg = f"dryrun: reboot at {at_str}"
+        else:
+            msg = sw.reboot(at=at_str)
+    except ConnectError as err:
+        logger.error(f"{err=}")
+        return 4
+    logger.info(msg)
+    del sw
+
+    dev.close()
+    logger.debug("success")
+    return 0
+
+def yymmddhhmm_type(dt_str: str) -> datetime.datetime:
+    try:
+        return datetime.datetime.strptime(dt_str, "%y%m%d%H%M")
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(f"{e}: {dt_str} must be yymmddhhmm format. ex. 2501020304")
+
 def main():
     parser = argparse.ArgumentParser(
         description="automatically detect Juniper models and automatically update JUNOS packages",
@@ -883,13 +948,18 @@ def main():
     parser.add_argument(
         "--rollback", action="store_true", help="rollback installed package"
     )
+    parser.add_argument(
+        "--rebootat",
+        default=None,
+        type=yymmddhhmm_type,
+        help="reboot at Date and Time. format is yymmddhhmm. ex: 2501020304",
+    )
     parser.add_argument("-d", "--debug", action="store_true", help="for debug")
     parser.add_argument("-V", action="version", version="%(prog)s " + version)
     global args
     args = parser.parse_args()
 
-    if args.debug:
-        print("main: start")
+    logger.debug("start")
 
     if read_config():
         print(args.recipe, "is not ready")
@@ -899,8 +969,7 @@ def main():
     if len(args.specialhosts) == 0:
         for i in config.sections():
             tmp = config.get(i, "host")
-            if args.debug:
-                print(i, tmp)
+            logger.debug(f"{i=} {tmp=}")
             if tmp is not None:
                 targets.append(i)
             else:
@@ -913,21 +982,18 @@ def main():
             else:
                 print(i, "is not found in", args.recipe)
                 sys.exit(1)
-            if args.debug:
-                print(i, tmp)
+            logger.debug(f"{i=} {tmp=}")
             targets.append(i)
 
-    if args.debug:
-        print(args)
-        print("specialhosts:", args.specialhosts)
-        print("targets:", targets)
+    logger.debug(f"{args=}")
+    logger.debug(f"{args.specialhosts=}")
+    logger.debug("f{targets=}")
 
-    for t in targets:
-        print("[%s]" % t)
-        if args.debug:
-            print("main:", datetime.datetime.now())
+    for host in targets:
+        logger.info(f"{host=}")
+        logger.debug(f"{datetime.datetime.now()=}")
 
-        err, dev = connect(t)
+        err, dev = connect(host)
         if err or dev is None:
             sys.exit(1)
         if (
@@ -937,24 +1003,25 @@ def main():
             and args.update is False
             and args.showversion is False
             and args.rollback is False
+            and args.rebootat is None
         ) or args.debug:
             pprint(dev.facts)
         if args.list_format is not None:
-            list_remote_path(t, dev)
+            list_remote_path(host, dev)
         # copy or update
         err = None
         if args.copy or args.update:
-            err = copy(t, dev)
+            err = copy(host, dev)
             if err:
                 sys.exit(1)
         # rollback
         if args.rollback:
-            pending = get_pending_version(t, dev)
+            pending = get_pending_version(host, dev)
             print(f"rollback: pending version is {pending}")
             if pending is None:
                 print("rollback: skip")
             else:
-                err = rollback(t, dev)
+                err = rollback(host, dev)
                 if err:
                     sys.exit(err)
                 else:
@@ -962,12 +1029,17 @@ def main():
                         print("rollback: successful")
         # install or update
         if args.install or args.update:
-            err = install(t, dev)
+            err = install(host, dev)
             if err:
                 sys.exit(1)
         # show version
         if args.showversion:
-            err = show_version(t, dev)
+            err = show_version(host, dev)
+            if err:
+                sys.exit(1)
+        # reboot at
+        if args.rebootat:
+            err = reboot(host, dev, args.rebootat)
             if err:
                 sys.exit(1)
         # close
@@ -980,8 +1052,7 @@ def main():
 
         print("")
 
-    if args.debug:
-        print("main: end")
+    logger.debug("end")
 
     return False
 

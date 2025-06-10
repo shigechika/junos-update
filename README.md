@@ -3,16 +3,15 @@ automatically detect Juniper models and automatically update JUNOS packages
 
 # usage
 ```
-% ./junos-update --help
-usage: junos-update [-h] [--recipe RECIPE] [--list] [--longlist] [--dryrun] [--copy] [--install] [--update] [--showversion] [-d] [-V]
-                    [hostname ...]
+% junos-update --help
+usage: junos-update [-h] [--recipe RECIPE] [--list] [--longlist] [--dryrun] [--copy] [--install] [--update] [--force] [--showversion] [--rollback] [--rebootat REBOOTAT] [-d] [-V] [hostname ...]
 
 automatically detect Juniper models and automatically update JUNOS packages
 
 positional arguments:
   hostname              special hostname(s)
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
   --recipe RECIPE       junos recipe filename (default: junos.ini)
   --list, --short, -ls  short list remote path (like as ls)
@@ -21,8 +20,11 @@ optional arguments:
   --copy                copy package from local to remote
   --install             install copied package on remote
   --update, --upgrade   copy(=--copy) and install(=--install)
+  --force               force execute copy, install and update
   --showversion, --version
                         show running/planning/pending version and reboot schedule
+  --rollback            rollback installed package
+  --rebootat REBOOTAT   reboot at Date and Time. format is yymmddhhmm. ex: 2501020304
   -d, --debug           for debug
   -V                    show program's version number and exit
 
@@ -31,9 +33,9 @@ default action is show device facts
 
 # Install
 
-```shell
-python3 -m venv venv
-venv/bin/activate
+```bash
+python3 -m venv .venv
+. .env/bin/activate
 pip3 install -r requirements.txt
 ```
 
@@ -47,22 +49,17 @@ pip3 install -r requirements.txt
 
 - pip3
 
-Ubuntu
+  - Ubuntu/Debian
 ```
 sudo apt install python3-pip
 ```
 
-CentOS 7
-```
-sudo yum install python3-pip
-```
-
-CentOS 8
+  - CentOS/RedHat
 ```
 sudo dnf install python3-pip
 ```
 
-macOS
+  - macOS
 ```
 brew install python3
 ```
@@ -217,6 +214,28 @@ dryrun: scp(cheksum:md5) junos-srxentedge-x86-64-18.4R3-S9.2.tgz srx.example.jp:
 dryrun: clear system reboot
 dryrun: request system configuration rescue save
 dryrun: request system software add /var/tmp/junos-srxentedge-x86-64-18.4R3-S9.2.tgz
+```
+
+- --rebootat
+
+```
+% junos-update --reboot 2506130500 --force
+[INFO]main - host='rt1.example.jp'
+[INFO]reboot - Shutdown at Fri Jun 13 05:00:00 2025. [pid 97978]
+
+[INFO]main - host='rt2.example.jp'
+[INFO]reboot - ANY SHUTDWON/REBOOT SCHEDULE EXISTS
+[INFO]reboot - dt=datetime.datetime(2025, 7, 20, 8, 0)
+[INFO]reboot - force clear reboot
+[INFO]clear_reboot - clear reboot schedule successful
+[INFO]reboot - Shutdown at Fri Jun 13 05:00:00 2025. [pid 3321]
+
+[INFO]main - host='rt3.example.jp'
+[INFO]reboot - ANY SHUTDWON/REBOOT SCHEDULE EXISTS
+[INFO]reboot - dt=datetime.datetime(2025, 6, 27, 9, 0)
+[INFO]reboot - force clear reboot
+[INFO]clear_reboot - clear reboot schedule successful
+[INFO]reboot - Shutdown at Fri Jun 13 05:00:00 2025. [pid 49174]
 ```
 
 - default
