@@ -179,7 +179,7 @@ def copy(hostname, dev):
                 cleanfs=True,
                 cleanfs_timeout=300,  # default 300
                 checksum=get_model_hash(hostname, dev.facts["model"]),
-                checksum_timeout=900,  # default 300
+                checksum_timeout=1200,  # default 300
                 checksum_algorithm=config.get(hostname, "hashalgo"),
                 force_copy=args.force,
             )
@@ -362,10 +362,10 @@ def install(hostname, dev):
             no_copy=True,
             issu=False,
             nssu=False,
-            timeout=1800,  # default 1800
+            timeout=2400,  # default 1800
             cleanfs_timeout=300,  # default 300
             checksum=get_model_hash(hostname, dev.facts["model"]),
-            checksum_timeout=900,  # default 300
+            checksum_timeout=1200,  # default 300
             checksum_algorithm=config.get(hostname, "hashalgo"),
             force_copy=args.force,
             all_re=True,
