@@ -35,7 +35,7 @@ default action is show device facts
 
 ```bash
 python3 -m venv .venv
-. .env/bin/activate
+. .venv/bin/activate
 pip3 install -r requirements.txt
 ```
 
