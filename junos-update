@@ -76,7 +76,7 @@ def connect(hostname):
         print("connect: start")
     dev = Device(
         host=config.get(hostname, "host"),
-        port=config.get(hostname, "port"),
+        # port=config.get(hostname, "port"),
         user=config.get(hostname, "id"),
         passwd=config.get(hostname, "pw"),
         ssh_private_key_file=config.get(hostname, "sshkey"),
@@ -269,8 +269,8 @@ def clear_reboot(dev) -> bool:
             logger.error(e)
             sys.exit(1)
     return False
-    
-    
+
+
 def install(hostname, dev):
     if args.debug:
         print("install: start")
@@ -827,7 +827,7 @@ def show_version(hostname, dev):
     return False
 
 
-def reboot(hostname : str , dev, reboot_dt : datetime.datetime):
+def reboot(hostname: str, dev, reboot_dt: datetime.datetime):
     logger.debug(f"{reboot_dt=}")
     try:
         dev.open()
@@ -842,15 +842,15 @@ def reboot(hostname : str , dev, reboot_dt : datetime.datetime):
     str = etree.tostring(rpc, encoding="unicode")
     logger.debug(f"{str=}")
     if str.find("No shutdown/reboot scheduled.") >= 0:
-        #if re.match(r"\S+-rt2\.nihon-u\.ac\.jp$", hostname) is not None:
+        # if re.match(r"\S+-rt2\.nihon-u\.ac\.jp$", hostname) is not None:
         #    # *-rt2 is reboot after about 30 minutes later
         #    reboot_dt = reboot_dt + timedelta(minutes=30)
         pass
     else:
         logger.info("ANY SHUTDWON/REBOOT SCHEDULE EXISTS")
-        match = re.search(r'^(\w+) requested by (\w+) at (.*)$', str, re.MULTILINE)
+        match = re.search(r"^(\w+) requested by (\w+) at (.*)$", str, re.MULTILINE)
         if len(match.groups()) == 3:
-            dt = datetime.datetime.strptime(match.group(3), '%a %b %d %H:%M:%S %Y')
+            dt = datetime.datetime.strptime(match.group(3), "%a %b %d %H:%M:%S %Y")
             logger.info(f"{dt=}")
             if args.force:
                 logger.info("force clear reboot")
@@ -876,11 +876,15 @@ def reboot(hostname : str , dev, reboot_dt : datetime.datetime):
     logger.debug("success")
     return 0
 
+
 def yymmddhhmm_type(dt_str: str) -> datetime.datetime:
     try:
         return datetime.datetime.strptime(dt_str, "%y%m%d%H%M")
     except ValueError as e:
-        raise argparse.ArgumentTypeError(f"{e}: {dt_str} must be yymmddhhmm format. ex. 2501020304")
+        raise argparse.ArgumentTypeError(
+            f"{e}: {dt_str} must be yymmddhhmm format. ex. 2501020304"
+        )
+
 
 def main():
     parser = argparse.ArgumentParser(
