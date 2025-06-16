@@ -288,22 +288,18 @@ def install(hostname, dev):
         print("remote package is not ready. Please consider --copy before --install")
 
     pending = get_pending_version(hostname, dev)
+    logger.debug(f"{pending=}")
     if pending is not None:
-        if args.debug:
-            print(f"install: pending package exist={pending}")
         planning = get_planning_version(hostname, dev)
+        logger.debug(f"{planning=}")
         ret = compare_version(pending, planning)
-        if args.debug:
-            print(f"install: compare_version={ret}")
-
+        logger.debug(f"install: compare_version={ret}")
         if ret == 1:
-            print(
-                "\tpending version seems newer than planning version. No need install."
-            )
+            logger.info(f"{pending=} > {planning=} : No need install.")
         elif ret == -1:
-            print("\tpending version seems older than planning version. NEED INSTALL.")
+            logger.info(f"{pending=} < {planning=} : NEED INSTALL.")
         elif ret == 0:
-            print("\tpending version seems same as planning version. No need install.")
+            logger.info(f"{pending=} = {planning=} : No need install.")
 
         if ret == 1 or ret == 0:
             if args.force:
@@ -371,19 +367,15 @@ def install(hostname, dev):
             all_re=True,
         )
         del sw
-        if args.debug:
-            print(msg)
+        logger.debug(f"{msg=}")
         if status:
-            if args.debug:
-                print("install: install successful")
+            logger.info("install successful")
             ret = False
         else:
-            if args.debug:
-                print("install: install failed")
+            logger.info("install failed")
             ret = True
 
-    if args.debug:
-        print("install: end ret=", ret)
+    logger.debug(f"end {ret=}")
     return ret
 
 
