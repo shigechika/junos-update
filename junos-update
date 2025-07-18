@@ -76,7 +76,7 @@ def connect(hostname):
         print("connect: start")
     dev = Device(
         host=config.get(hostname, "host"),
-        # port=config.get(hostname, "port"),
+        port=int(config.get(hostname, "port")),
         user=config.get(hostname, "id"),
         passwd=config.get(hostname, "pw"),
         ssh_private_key_file=config.get(hostname, "sshkey"),
