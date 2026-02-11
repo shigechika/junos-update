@@ -34,6 +34,7 @@ tests/
 ├── test_process_host.py # process_host統合テスト（後方互換）
 ├── test_parallel.py    # 並列実行・ターゲット決定のテスト
 ├── test_reboot.py      # reboot・config変更検出・snapshot削除のテスト
+├── test_config_push.py # config サブコマンド（load_config）のテスト
 └── test_rsi.py     # RSI/SCF収集のテスト
 pyproject.toml      # パッケージメタデータ、エントリポイント
 config.ini          # 設定ファイル（設定例）
@@ -65,6 +66,7 @@ LICENSE
 - `get_rescue_config_time()` — rescue config ファイルの更新時刻取得
 - `check_and_reinstall()` — config変更検出＋validation付き自動再インストール
 - `get_hashcache()` / `set_hashcache()` — チェックサムキャッシュ（スレッド安全）
+- `load_config()` — set コマンドファイルのロード＋コミット（lock→load→diff→commit_check→commit confirmed→confirm→unlock）
 - `list_remote_path()` — リモートファイル一覧
 
 ### rsi.py — RSI/SCF収集
@@ -73,7 +75,7 @@ LICENSE
 
 ### cli.py — サブコマンドルーティング
 - `main()` — argparse サブコマンド定義、ディスパッチ
-- `cmd_upgrade()`, `cmd_copy()`, `cmd_install()`, `cmd_rollback()`, `cmd_version()`, `cmd_reboot()`, `cmd_ls()`, `cmd_facts()` — サブコマンド用エントリ関数
+- `cmd_upgrade()`, `cmd_copy()`, `cmd_install()`, `cmd_rollback()`, `cmd_version()`, `cmd_reboot()`, `cmd_ls()`, `cmd_config()`, `cmd_facts()` — サブコマンド用エントリ関数
 - `process_host()` — 旧CLI互換の統合処理関数
 
 ## CLI設計
@@ -86,6 +88,7 @@ junos-ops rollback [hostname ...]          # ロールバック
 junos-ops version [hostname ...]           # バージョン表示
 junos-ops reboot --at YYMMDDHHMM [hostname ...]  # リブート
 junos-ops ls [-l] [hostname ...]           # リモートファイル一覧
+junos-ops config -f FILE [--confirm N] [hostname ...]  # set コマンドファイル適用
 junos-ops rsi [hostname ...]               # RSI/SCF収集
 junos-ops [hostname ...]                   # サブコマンド省略 → device facts 表示
 junos-ops --version                        # プログラムバージョン
@@ -141,7 +144,7 @@ host = 192.0.2.1           # IPアドレスでオーバーライド
 pytest tests/ -v --tb=short
 ```
 
-89テスト（バージョン比較、設定読込、接続モック、process_host統合テスト、reboot・config変更検出・snapshot削除、RSI収集モック、並列実行、スレッド安全性）。
+97テスト（バージョン比較、設定読込、接続モック、process_host統合テスト、reboot・config変更検出・snapshot削除、config push、RSI収集モック、並列実行、スレッド安全性）。
 
 ## 既知の注意事項
 
