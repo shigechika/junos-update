@@ -93,6 +93,8 @@ hashalgo = md5        # Checksum algorithm
 rpath = /var/tmp      # Remote path
 # huge_tree = true    # Allow large XML responses
 # RSI_DIR = ./rsi/    # Output directory for RSI/SCF files
+# DISPLAY_STYLE = display set   # SCF output style (default: display set)
+# DISPLAY_STYLE =               # Empty for stanza format (show configuration only)
 
 # model.file = package filename
 # model.hash = checksum value

@@ -93,6 +93,8 @@ hashalgo = md5        # チェックサムアルゴリズム
 rpath = /var/tmp      # リモートパス
 # huge_tree = true    # 大きなXMLレスポンスを許可
 # RSI_DIR = ./rsi/    # RSI/SCFファイルの出力先
+# DISPLAY_STYLE = display set   # SCF出力形式（デフォルト: display set）
+# DISPLAY_STYLE =               # 空にすると show configuration のみ（stanza形式）
 
 # モデル名.file = パッケージファイル名
 # モデル名.hash = チェックサム値
