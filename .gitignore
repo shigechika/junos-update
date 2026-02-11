@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# venv
+.venv/
+p312/
+
+# IDE
+.vscode/
+
+# ログ
+logger.log*
+
+# バックアップ・パッチ
+*~
+*.orig
+*.rej
+*.patch
+
+# JUNOSパッケージ
+*.tgz
