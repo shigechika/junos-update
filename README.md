@@ -1,36 +1,39 @@
 # junos-ops
 
-Juniperデバイスのモデルを自動検出し、JUNOSパッケージを自動更新するツールです。
+[日本語版 / Japanese](README.ja.md)
 
-## 特徴
+A tool for automatic detection of Juniper device models and automated JUNOS package updates.
 
-- デバイスモデルの自動検出とパッケージの自動マッピング
-- SCP転送＋チェックサム検証による安全なパッケージコピー
-- インストール前のパッケージ検証（validate）
-- ロールバック対応（MX/EX/SRXモデル別処理）
-- スケジュールリブート
-- RSI/SCF の並列収集
-- ドライランモード（`--dry-run`）で事前確認
-- ThreadPoolExecutor による並列実行
-- 設定ファイル（INI形式）によるホスト・パッケージ管理
+## Features
 
-## 目次
+- Automatic device model detection and package mapping
+- Safe package copy via SCP with checksum verification
+- Pre-install package validation
+- Rollback support (model-specific handling for MX/EX/SRX)
+- Scheduled reboot
+- Parallel RSI/SCF collection
+- Dry-run mode (`--dry-run`) for pre-flight verification
+- Parallel execution via ThreadPoolExecutor
+- Configuration push with commit confirmed safety
+- INI-based host and package management
 
-- [インストール](#インストール)
-- [設定ファイル（config.ini）](#設定ファイルconfigini)
-- [使い方](#使い方)
-- [ワークフロー](#ワークフロー)
-- [実行例](#実行例)
-- [対応モデル](#対応モデル)
+## Table of Contents
+
+- [Installation](#installation)
+- [Configuration File (config.ini)](#configuration-file-configini)
+- [Usage](#usage)
+- [Workflow](#workflow)
+- [Examples](#examples)
+- [Supported Models](#supported-models)
 - [License](#license)
 
-## インストール
+## Installation
 
 ```bash
 pip install git+https://github.com/shigechika/junos-ops.git
 ```
 
-### 開発用インストール
+### Development Setup
 
 ```bash
 git clone https://github.com/shigechika/junos-ops.git
@@ -40,15 +43,15 @@ python3 -m venv .venv
 pip install -e ".[test]"
 ```
 
-### 依存ライブラリ
+### Dependencies
 
-- [junos-eznc (PyEZ)](https://www.juniper.net/documentation/product/us/en/junos-pyez) — Juniper NETCONF自動化ライブラリ
-- [looseversion](https://pypi.org/project/looseversion/) — バージョン比較
+- [junos-eznc (PyEZ)](https://www.juniper.net/documentation/product/us/en/junos-pyez) — Juniper NETCONF automation library
+- [looseversion](https://pypi.org/project/looseversion/) — Version comparison
 
-### pip3のインストール（未導入の場合）
+### Installing pip3 (if not available)
 
 <details>
-<summary>OS別手順</summary>
+<summary>OS-specific instructions</summary>
 
 - **Ubuntu/Debian**
   ```bash
@@ -67,122 +70,122 @@ pip install -e ".[test]"
 
 </details>
 
-## 設定ファイル（config.ini）
+## Configuration File (config.ini)
 
-INI形式の設定ファイルで、接続情報とモデル別パッケージを定義します。
+An INI-format configuration file that defines connection settings and model-to-package mappings.
 
-設定ファイルは以下の順序で探索されます（`-c` / `--config` で明示指定も可能）：
+The configuration file is searched in the following order (`-c` / `--config` can override):
 
-1. カレントディレクトリの `./config.ini`
-2. `~/.config/junos-ops/config.ini`（XDG_CONFIG_HOME）
+1. `./config.ini` in the current directory
+2. `~/.config/junos-ops/config.ini` (XDG_CONFIG_HOME)
 
-### DEFAULTセクション
+### DEFAULT Section
 
-全ホスト共通の接続設定とモデル→パッケージマッピングを記述します。
+Defines global connection settings and model-to-package mappings shared by all hosts.
 
 ```ini
 [DEFAULT]
-id = exadmin          # SSHユーザ名
-pw = password         # SSHパスワード
-sshkey = id_ed25519   # SSH秘密鍵ファイル
-port = 830            # NETCONFポート
-hashalgo = md5        # チェックサムアルゴリズム
-rpath = /var/tmp      # リモートパス
-# huge_tree = true    # 大きなXMLレスポンスを許可
-# RSI_DIR = ./rsi/    # RSI/SCFファイルの出力先
+id = exadmin          # SSH username
+pw = password         # SSH password
+sshkey = id_ed25519   # SSH private key file
+port = 830            # NETCONF port
+hashalgo = md5        # Checksum algorithm
+rpath = /var/tmp      # Remote path
+# huge_tree = true    # Allow large XML responses
+# RSI_DIR = ./rsi/    # Output directory for RSI/SCF files
 
-# モデル名.file = パッケージファイル名
-# モデル名.hash = チェックサム値
+# model.file = package filename
+# model.hash = checksum value
 EX2300-24T.file = junos-arm-32-18.4R3-S10.tgz
 EX2300-24T.hash = e233b31a0b9233bc4c56e89954839a8a
 ```
 
-モデル名はデバイスから自動取得される`model`フィールドと一致させます。
+The model name must match the `model` field automatically retrieved from the device.
 
-### ホストセクション
+### Host Sections
 
-各セクション名がホスト名になります。DEFAULTの値をホスト単位でオーバーライドできます。
+Each section name becomes the hostname. DEFAULT values can be overridden per host.
 
 ```ini
-[rt1.example.jp]             # セクション名がそのまま接続先ホスト名
+[rt1.example.jp]             # Section name is used as the connection hostname
 [rt2.example.jp]
-host = 192.0.2.1             # IPアドレスで接続先を指定
+host = 192.0.2.1             # Override connection target with IP address
 [sw1.example.jp]
-id = sw1                     # 接続ユーザを変更
-sshkey = sw1_rsa             # SSH鍵を変更
+id = sw1                     # Override SSH username
+sshkey = sw1_rsa             # Override SSH key
 [sw2.example.jp]
-port = 10830                 # ポートを変更
+port = 10830                 # Override port
 [sw3.example.jp]
-EX4300-32F.file = jinstall-ex-4300-20.4R3.8-signed.tgz   # このホストだけ別バージョン
+EX4300-32F.file = jinstall-ex-4300-20.4R3.8-signed.tgz   # Different version for this host
 EX4300-32F.hash = 353a0dbd8ff6a088a593ec246f8de4f4
 ```
 
-## 使い方
+## Usage
 
 ```
 junos-ops <subcommand> [options] [hostname ...]
 ```
 
-### サブコマンド一覧
+### Subcommands
 
-| サブコマンド | 説明 |
-|-------------|------|
-| `upgrade` | コピー＋インストールを一括実行 |
-| `copy` | ローカルからリモートへパッケージをコピー |
-| `install` | コピー済みパッケージをインストール |
-| `rollback` | 前バージョンにロールバック |
-| `version` | running/planning/pendingバージョンとリブート予定を表示 |
-| `reboot --at YYMMDDHHMM` | 指定日時にリブートをスケジュール |
-| `ls [-l]` | リモートパスのファイル一覧 |
-| `config -f FILE [--confirm N]` | set コマンドファイルを適用 |
-| `rsi` | RSI/SCF を並列収集 |
-| （なし） | デバイスファクト（device facts）を表示 |
+| Subcommand | Description |
+|------------|-------------|
+| `upgrade` | Copy and install package |
+| `copy` | Copy package from local to remote |
+| `install` | Install a previously copied package |
+| `rollback` | Rollback to the previous version |
+| `version` | Show running/planning/pending versions and reboot schedule |
+| `reboot --at YYMMDDHHMM` | Schedule a reboot at the specified time |
+| `ls [-l]` | List files on the remote path |
+| `config -f FILE [--confirm N]` | Push a set command file to devices |
+| `rsi` | Collect RSI/SCF in parallel |
+| (none) | Show device facts |
 
-### 共通オプション
+### Common Options
 
-| オプション | 説明 |
-|-----------|------|
-| `hostname` | 対象ホスト名（省略時は設定ファイル内の全ホスト） |
-| `-c`, `--config CONFIG` | 設定ファイル指定（デフォルト: `config.ini` → `~/.config/junos-ops/config.ini`） |
-| `-n`, `--dry-run` | テスト実行（接続とメッセージ出力のみ、実行しない） |
-| `-d`, `--debug` | デバッグ出力 |
-| `--force` | 条件を無視して強制実行 |
-| `--workers N` | 並列実行数（デフォルト: upgrade系=1, rsi=20） |
-| `--version` | プログラムバージョン表示 |
+| Option | Description |
+|--------|-------------|
+| `hostname` | Target hostname(s) (defaults to all hosts in config file) |
+| `-c`, `--config CONFIG` | Config file path (default: `config.ini` or `~/.config/junos-ops/config.ini`) |
+| `-n`, `--dry-run` | Test run (connect and display messages only, no execution) |
+| `-d`, `--debug` | Debug output |
+| `--force` | Force execution regardless of conditions |
+| `--workers N` | Parallel workers (default: 1 for upgrade, 20 for rsi) |
+| `--version` | Show program version |
 
-## ワークフロー
+## Workflow
 
-JUNOSアップデートの典型的な作業フローです。
+### JUNOS Upgrade Workflow
 
 ```
-1. dry-run で事前確認
+1. Pre-flight check with dry-run
    junos-ops upgrade -n hostname
 
-2. upgrade でコピー＋インストール
+2. Copy and install with upgrade
    junos-ops upgrade hostname
 
-3. version でバージョン確認
+3. Verify version
    junos-ops version hostname
 
-4. reboot でリブート日時を指定
+4. Schedule reboot
    junos-ops reboot --at 2506130500 hostname
 ```
 
-問題が発生した場合は `rollback` で前バージョンに戻せます。
+Use `rollback` to revert to the previous version if problems occur.
 
-### config 適用ワークフロー
+### Config Push Workflow
 
 ```
-1. dry-run で差分を確認
+1. Preview changes with dry-run
    junos-ops config -f commands.set -n hostname
 
-2. 適用
+2. Apply changes
    junos-ops config -f commands.set hostname
 ```
 
-## 実行例
+## Examples
 
-### upgrade（パッケージ更新）
+### upgrade (package update)
 
 ```
 % junos-ops upgrade rt1.example.jp
@@ -197,7 +200,7 @@ install: rescue config save successful
 rt1.example.jp: software validate package-result: 0
 ```
 
-### version（バージョン確認）
+### version (version check)
 
 ```
 % junos-ops version rt1.example.jp
@@ -212,7 +215,7 @@ rt1.example.jp: software validate package-result: 0
   - reboot requested by exadmin at Sat Dec  4 05:00:00 2021
 ```
 
-### rsi（RSI/SCF並列収集）
+### rsi (parallel RSI/SCF collection)
 
 ```
 % junos-ops rsi --workers 5 rt1.example.jp rt2.example.jp
@@ -224,7 +227,7 @@ rt1.example.jp: software validate package-result: 0
   rt2.example.jp.RSI done
 ```
 
-### reboot（スケジュールリブート）
+### reboot (scheduled reboot)
 
 ```
 % junos-ops reboot --at 2506130500 rt1.example.jp
@@ -232,9 +235,9 @@ rt1.example.jp: software validate package-result: 0
 	Shutdown at Fri Jun 13 05:00:00 2025. [pid 97978]
 ```
 
-### config（set コマンドファイル適用）
+### config (push set command file)
 
-set 形式のコマンドファイルを複数デバイスに適用します。commit check → commit confirmed → confirm の安全なコミットフローで実行します。
+Push a set-format command file to multiple devices. Uses a safe commit flow: commit check, commit confirmed, then confirm.
 
 ```
 % cat add-user.set
@@ -264,9 +267,9 @@ set system login user viewer authentication ssh-ed25519 "ssh-ed25519 AAAA..."
 	...
 ```
 
-`--confirm N` で commit confirmed のタイムアウトを変更できます（デフォルト: 1分）。
+Use `--confirm N` to change the commit confirmed timeout (default: 1 minute).
 
-### 引数なし（デバイスファクト表示）
+### No subcommand (show device facts)
 
 ```
 % junos-ops gw1.example.jp
@@ -278,12 +281,12 @@ set system login user viewer authentication ssh-ed25519 "ssh-ed25519 AAAA..."
  ...}
 ```
 
-## 対応モデル
+## Supported Models
 
-設定ファイルでモデル名とパッケージファイルを定義することで、任意のJuniperモデルに対応できます。設定例に含まれるモデル:
+Any Juniper model can be supported by defining the model name and package file in the configuration file. Models included in the example configuration:
 
-| シリーズ | モデル例 |
-|---------|---------|
+| Series | Example Models |
+|--------|---------------|
 | EX | EX2300-24T, EX3400-24T, EX4300-32F |
 | MX | MX5-T, MX240 |
 | QFX | QFX5110-48S-4C |
