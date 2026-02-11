@@ -676,6 +676,66 @@ def get_reboot_information(hostname, dev):
     return m.group(1)
 
 
+def get_commit_information(dev):
+    """最新コミット情報を取得する
+
+    :return: (epoch_seconds, datetime_str, user, client) のタプル、または None
+    """
+    try:
+        xml = dev.rpc.get_commit_information()
+    except RpcError as e:
+        logger.error(f"get_commit_information: RpcError: {e}")
+        return None
+    except RpcTimeoutError as e:
+        logger.error(f"get_commit_information: RpcTimeoutError: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"get_commit_information: {e}")
+        return None
+
+    for elem in xml:
+        if elem.tag == "commit-history":
+            seq = elem.find("sequence-number")
+            if seq is not None and seq.text == "0":
+                dt = elem.find("date-time")
+                user = elem.find("user")
+                client = elem.find("client")
+                if dt is not None:
+                    epoch = int(dt.get("seconds", "0"))
+                    return (epoch, dt.text, user.text if user is not None else "", client.text if client is not None else "")
+    return None
+
+
+def get_rescue_config_time(dev):
+    """rescue config ファイルの更新時刻（epoch秒）を取得する
+
+    :return: epoch_seconds (int) または None（ファイルなし・エラー時）
+    """
+    try:
+        xml = dev.rpc.file_list(path="/config/rescue.conf.gz", detail=True)
+    except RpcError as e:
+        logger.error(f"get_rescue_config_time: RpcError: {e}")
+        return None
+    except RpcTimeoutError as e:
+        logger.error(f"get_rescue_config_time: RpcTimeoutError: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"get_rescue_config_time: {e}")
+        return None
+
+    # ファイルが存在しない場合は <output> にエラーメッセージが入る
+    file_info = xml.find(".//file-information")
+    if file_info is None:
+        return None
+    file_date = file_info.find("file-date")
+    if file_date is None:
+        return None
+    seconds = file_date.get("seconds")
+    if seconds is None:
+        return None
+    return int(seconds)
+
+
 def show_version(hostname, dev):
     """show version
     show running version
@@ -712,6 +772,16 @@ def show_version(hostname, dev):
     elif ret == 0:
         print(f"    - {running=} = {pending=}")
 
+    # コミット情報と config 変更検出
+    commit_info = get_commit_information(dev)
+    if commit_info is not None:
+        commit_epoch, commit_dt_str, commit_user, commit_client = commit_info
+        print(f"  - last commit: {commit_dt_str} by {commit_user} via {commit_client}")
+        if pending is not None:
+            rescue_epoch = get_rescue_config_time(dev)
+            if rescue_epoch is None or commit_epoch > rescue_epoch:
+                print(f"    - WARNING: config modified after firmware install. Re-install will run on reboot.")
+
     # local package check
     local = check_local_package(hostname, dev)
 
@@ -725,6 +795,83 @@ def show_version(hostname, dev):
     logger.debug("end")
 
     return False
+
+
+def check_and_reinstall(hostname, dev) -> bool:
+    """pending version がある場合、config が install 後に変更されていたら再インストールする
+
+    :return: True=エラー, False=正常（再インストール不要含む）
+    """
+    pending = get_pending_version(hostname, dev)
+    if pending is None:
+        logger.debug("check_and_reinstall: no pending version, skip")
+        return False
+
+    commit_info = get_commit_information(dev)
+    if commit_info is None:
+        logger.debug("check_and_reinstall: cannot get commit information, skip")
+        return False
+
+    commit_epoch, commit_dt_str, commit_user, commit_client = commit_info
+    rescue_epoch = get_rescue_config_time(dev)
+
+    if rescue_epoch is not None and commit_epoch <= rescue_epoch:
+        logger.debug("check_and_reinstall: config not modified after rescue save, skip")
+        return False
+
+    # config が rescue config 保存後に変更されている（または rescue config がない）
+    if rescue_epoch is None:
+        print(f"\tWARNING: rescue config not found. Re-installing firmware with current config.")
+    else:
+        print(f"\tWARNING: config modified after firmware install ({commit_dt_str} by {commit_user} via {commit_client}).")
+        print(f"\tRe-installing firmware to validate current config.")
+
+    if common.args.dry_run:
+        print("\tdry-run: re-install and rescue config save skipped")
+        return False
+
+    # rescue config 再保存
+    cu = Config(dev)
+    try:
+        ret = cu.rescue("save")
+        if ret:
+            print("\tre-install: rescue config save successful")
+        else:
+            print("\tre-install: rescue config save failed")
+            return True
+    except Exception as e:
+        logger.error(f"check_and_reinstall: rescue save failed: {e}")
+        return True
+
+    # 再インストール（validation 付き）
+    try:
+        sw = SW(dev)
+        status, msg = sw.install(
+            get_model_file(hostname, dev.facts["model"]),
+            remote_path=common.config.get(hostname, "rpath"),
+            progress=True,
+            validate=True,
+            cleanfs=False,
+            no_copy=True,
+            issu=False,
+            nssu=False,
+            timeout=2400,
+            checksum=get_model_hash(hostname, dev.facts["model"]),
+            checksum_timeout=1200,
+            checksum_algorithm=common.config.get(hostname, "hashalgo"),
+            all_re=True,
+        )
+        del sw
+        logger.debug(f"check_and_reinstall: {msg=}")
+        if status:
+            print("\tre-install: successful")
+            return False
+        else:
+            print(f"\tre-install: failed: {msg}")
+            return True
+    except Exception as e:
+        logger.error(f"check_and_reinstall: install failed: {e}")
+        return True
 
 
 def reboot(hostname: str, dev, reboot_dt: datetime.datetime):
@@ -751,6 +898,11 @@ def reboot(hostname: str, dev, reboot_dt: datetime.datetime):
                     return 3
             else:
                 logger.debug("skip clear reboot")
+
+    # config 変更検出 + 自動再インストール
+    if check_and_reinstall(hostname, dev):
+        return 6
+
     # reboot
     at_str = reboot_dt.strftime("%y%m%d%H%M")
     sw = SW(dev)
