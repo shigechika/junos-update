@@ -13,7 +13,7 @@ junos-opsは、Juniper Networksデバイスの運用を自動化するPythonツ�
 - **プロトコル:** NETCONF（ポート830）、SCP（ファイル転送）
 - **パッケージ管理:** pyproject.toml（pip installable）
 - **テスト:** pytest + モック
-- **CI:** GitHub Actions（Python 3.12/3.13 マトリクス）
+- **CI:** GitHub Actions（Python 3.12/3.13 マトリクス、ビルド検証付き）
 - **ライセンス:** Apache License 2.0
 
 ## ファイル構成
@@ -146,6 +146,14 @@ pytest tests/ -v --tb=short
 ```
 
 97テスト（バージョン比較、設定読込、接続モック、process_host統合テスト、reboot・config変更検出・snapshot削除、config push、RSI収集モック、並列実行、スレッド安全性）。
+
+### ビルド検証
+
+```bash
+pip install build && python -m build
+```
+
+CI で sdist / wheel のビルドを検証。pyproject.toml の記述ミス（PEP 639 ライセンス競合等）を早期検出する。
 
 ## 既知の注意事項
 
