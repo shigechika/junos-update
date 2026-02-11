@@ -39,7 +39,8 @@ tests/
 pyproject.toml      # パッケージメタデータ、エントリポイント
 config.ini          # 設定ファイル（設定例）
 logging.ini         # ロギング設定
-README.md
+README.md           # 英語版
+README.ja.md        # 日本語版
 LICENSE
 ```
 
