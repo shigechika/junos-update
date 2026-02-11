@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "junos-ops"
+dynamic = ["version"]
+description = "Juniper Networks デバイス運用ツール"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.12"
+dependencies = [
+    "junos-eznc",
+    "looseversion",
+]
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-cov"]
+
+[project.scripts]
+junos-ops = "junos_ops.cli:main"
+
+[tool.setuptools]
+packages = ["junos_ops"]
+
+[tool.setuptools.dynamic]
+version = {attr = "junos_ops.__version__"}

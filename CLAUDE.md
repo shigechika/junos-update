@@ -4,21 +4,34 @@
 
 ## プロジェクト概要
 
-junos-updateは、Juniper Networksデバイスのモデルを自動検出し、JUNOSパッケージを自動更新するPythonスクリプトです。NETCONF/SSH経由でデバイスに接続し、パッケージのコピー・インストール・ロールバック・リブートスケジュールを管理します。
+junos-opsは、Juniper Networksデバイスの運用を自動化するPythonツールです。デバイスモデルの自動検出、JUNOSパッケージの自動更新、ロールバック、リブートスケジュール管理をNETCONF/SSH経由で行います。
 
 ## 技術スタック
 
-- **言語:** Python 3（3.13対応済み）
+- **言語:** Python 3（3.12以上）
 - **主要ライブラリ:** junos-eznc（PyEZ）— Juniper公式のPython自動化ライブラリ
 - **プロトコル:** NETCONF（ポート830）、SCP（ファイル転送）
+- **パッケージ管理:** pyproject.toml（pip installable）
+- **テスト:** pytest + モック
+- **CI:** GitHub Actions（Python 3.12/3.13 マトリクス）
 - **ライセンス:** Apache License 2.0
 
 ## ファイル構成
 
 ```
-junos-update    # メインスクリプト（単一ファイル構成）
-junos.ini       # レシピファイル（設定例）
-requirements.txt
+junos_ops/
+├── __init__.py     # パッケージ定義、__version__
+├── __main__.py     # python -m junos_ops 対応
+└── cli.py          # メインロジック（全関数）
+tests/
+├── conftest.py     # pytest フィクスチャ
+├── test_version.py
+├── test_config.py
+├── test_connect.py
+└── test_process_host.py
+pyproject.toml      # パッケージメタデータ、エントリポイント
+config.ini          # 設定ファイル（設定例）
+logging.ini         # ロギング設定
 README.md
 LICENSE
 ```
@@ -28,12 +41,13 @@ LICENSE
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-pip3 install -r requirements.txt
+pip install -e ".[test]"
 ```
 
-## レシピファイル（junos.ini）の構造
+## 設定ファイル（config.ini）の構造
 
 INI形式の設定ファイル。configparserで読み込む。
+探索順: `--config`指定 → `./config.ini` → `~/.config/junos-ops/config.ini`
 
 ### DEFAULTセクション
 
@@ -72,27 +86,28 @@ host = 192.0.2.1           # IPアドレスでオーバーライド
 
 ## コードの主要構成
 
-メインスクリプト`junos-update`は単一ファイルで、以下の機能群で構成される。
+`junos_ops/cli.py` に全関数が集約されている。
 
 - **接続管理:** `connect()` — NETCONF接続（認証エラー、タイムアウト等の個別例外処理あり）
 - **パッケージ転送:** `copy()` — SCP転送＋チェックサム検証、ストレージクリーンアップ
 - **インストール:** `install()` — パッケージ検証・インストール（pre/postフライトチェック）
 - **ロールバック:** `rollback()` — 前バージョンへの復帰（MX/EX/SRXモデル別処理あり）
 - **リブート:** `reboot()` — スケジュールリブートまたは即時リブート
-- **バージョン管理:** `get_running_version()`, `get_pending_version()`, `get_planning_version()`, `compare_version()`
-- **設定読込:** `read_config()` — junos.iniの解析
-- **ドライラン:** `dryrun()` — 実行せずに操作内容を表示
+- **ホスト処理:** `process_host()` — 単一ホストの全処理（ThreadPoolExecutor対応済み）
+- **バージョン管理:** `get_pending_version()`, `get_planning_version()`, `compare_version()`
+- **設定読込:** `read_config()` — config.iniの解析（XDG対応）
+- **ドライラン:** `dry_run()` — 実行せずに操作内容を表示
 
 ## テスト
 
-フォーマルなテストスイートは存在しない。`--dryrun`オプションが手動テスト手段となる。
-
 ```bash
-./junos-update --update --dryrun hostname
+pytest tests/ -v --tb=short
 ```
+
+45テスト（バージョン比較、設定読込、接続モック、process_host統合テスト、スレッド安全性）。
 
 ## 既知の注意事項
 
-- `logging.ini`ファイルがスクリプト起動時に必要だが、リポジトリに含まれていない
-- グローバル変数`config`が`logging.config`と`configparser`の両方で使われており、43行目で`config.fileConfig()`呼出し後に46行目で`config = None`で上書きされる
+- グローバル変数`config`が`logging.config`と`configparser`の両方で使われており、モジュール読込時に`config.fileConfig()`呼出し後に`config = None`で上書きされる
 - `args`と`config`はグローバル変数として管理される
+- `config`への書き込みは`config_lock`（threading.Lock）で保護済み

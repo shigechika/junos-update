@@ -21,11 +21,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - name: Install package with test dependencies
+        run: pip install -e ".[test]"
 
       - name: Syntax check
-        run: python3 -m py_compile junos-update
+        run: python3 -c "import junos_ops.cli"
 
       - name: Run tests
         run: pytest tests/ -v --tb=short
