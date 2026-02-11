@@ -5,14 +5,33 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "junos-ops"
 dynamic = ["version"]
-description = "Juniper Networks デバイス運用ツール"
+description = "Automated JUNOS package management tool for Juniper Networks devices"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12"
+authors = [
+    {name = "AIKAWA Shigechika"},
+]
+keywords = ["juniper", "junos", "netconf", "pyez", "network", "automation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Networking",
+    "Topic :: System :: Systems Administration",
+]
 dependencies = [
     "junos-eznc",
     "looseversion",
 ]
+
+[project.urls]
+Homepage = "https://github.com/shigechika/junos-ops"
+Repository = "https://github.com/shigechika/junos-ops"
+Issues = "https://github.com/shigechika/junos-ops/issues"
 
 [project.optional-dependencies]
 test = ["pytest", "pytest-cov"]
