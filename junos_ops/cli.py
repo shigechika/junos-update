@@ -13,35 +13,17 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-from looseversion import LooseVersion
-from jnpr.junos import Device
-from jnpr.junos.exception import (
-    ConnectAuthError,
-    ConnectClosedError,
-    ConnectError,
-    ConnectRefusedError,
-    ConnectTimeoutError,
-    ConnectUnknownHostError,
-)
-from jnpr.junos.exception import RpcError, RpcTimeoutError
-from jnpr.junos.utils.config import Config
-from jnpr.junos.utils.fs import FS
-from jnpr.junos.utils.sw import SW
-from lxml import etree
-from ncclient.operations.errors import TimeoutExpiredError
+from jnpr.junos.exception import ConnectClosedError
 from pprint import pprint
 import argparse
-import configparser
-import datetime
-import re
 import sys
-import threading
-from logging import getLogger, config
+from logging import getLogger
 import logging
+import logging.config
 import os
 
 if os.path.isfile("logging.ini"):
-    config.fileConfig("logging.ini")
+    logging.config.fileConfig("logging.ini")
 else:
     logging.basicConfig(
         level=logging.INFO,
@@ -51,858 +33,218 @@ else:
 logger = logging.getLogger(__name__)
 
 from junos_ops import __version__ as version
+from junos_ops import common
+from junos_ops import upgrade
+from junos_ops import rsi
 
-config = None
-config_lock = threading.Lock()
-args = None
+# upgrade モジュールの関数への参照（後方互換）
+copy = upgrade.copy
+rollback = upgrade.rollback
+clear_reboot = upgrade.clear_reboot
+install = upgrade.install
+get_model_file = upgrade.get_model_file
+get_model_hash = upgrade.get_model_hash
+get_hashcache = upgrade.get_hashcache
+set_hashcache = upgrade.set_hashcache
+check_local_package = upgrade.check_local_package
+check_remote_package = upgrade.check_remote_package
+list_remote_path = upgrade.list_remote_path
+dry_run = upgrade.dry_run
+check_running_package = upgrade.check_running_package
+compare_version = upgrade.compare_version
+get_pending_version = upgrade.get_pending_version
+get_planning_version = upgrade.get_planning_version
+get_reboot_information = upgrade.get_reboot_information
+show_version = upgrade.show_version
+reboot = upgrade.reboot
+yymmddhhmm_type = upgrade.yymmddhhmm_type
 
-DEFAULT_CONFIG = "config.ini"
-
-
-def get_default_config():
-    """設定ファイルのデフォルトパスを探索順に返す"""
-    # カレントディレクトリ
-    if os.path.isfile(DEFAULT_CONFIG):
-        return DEFAULT_CONFIG
-    # XDG_CONFIG_HOME（未設定なら ~/.config）
-    xdg = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
-    xdg_path = os.path.join(xdg, "junos-ops", DEFAULT_CONFIG)
-    if os.path.isfile(xdg_path):
-        return xdg_path
-    return DEFAULT_CONFIG
-
-
-def read_config():
-    global config
-    config = configparser.ConfigParser(allow_no_value=True)
-    config.read(args.config)
-    if len(config.sections()) == 0:
-        print(args.config, "is empty")
-        return True
-    for section in config.sections():
-        if config.has_option(section, "host"):
-            host = config.get(section, "host")
-        else:
-            host = None
-        if host is None:
-            # host is [section] name
-            config.set(section, "host", section)
-        if args.debug:
-            for key in config[section]:
-                print(section, ">", key, ":", config[section][key])
-            print()
-    return False
+# common モジュールの関数への参照（後方互換）
+get_default_config = common.get_default_config
+read_config = common.read_config
+connect = common.connect
 
 
-def connect(hostname):
-    if args.debug:
-        print("connect: start")
-    dev = Device(
-        host=config.get(hostname, "host"),
-        port=int(config.get(hostname, "port")),
-        user=config.get(hostname, "id"),
-        passwd=config.get(hostname, "pw"),
-        ssh_private_key_file=config.get(hostname, "sshkey"),
-    )
-    err = None
-    try:
-        dev.open()
-        err = False
-    except ConnectAuthError as e:
-        print("Authentication credentials fail to login: {0}".format(e))
-        dev = None
-        err = True
-    except ConnectRefusedError as e:
-        print("NETCONF Connection refused: {0}".format(e))
-        dev = None
-        err = True
-    except ConnectTimeoutError as e:
-        print("Connection timeout: {0}".format(e))
-        dev = None
-        err = True
-    except ConnectError as e:
-        print("Cannot connect to device: {0}".format(e))
-        dev = None
-        err = True
-    except ConnectUnknownHostError as e:
-        print("Unknown Host: {0}".format(e))
-        dev = None
-        err = True
-    except Exception as e:
-        print(e)
-        dev = None
-        err = True
-    if args.debug:
-        print("connect: err=", err, "dev=", dev)
-    if args.debug:
-        print("connect: end")
-    return err, dev
+# cli.py 内の関数が config/args/config_lock をモジュール外からもアクセスできるようにする
+def __getattr__(name):
+    if name in ("config", "config_lock", "args"):
+        return getattr(common, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-def copy(hostname, dev):
-    if args.debug:
-        print("copy: start")
-    if args.force:
-        if args.debug:
-            print("copy: force copy")
-    else:
-        if check_running_package(hostname, dev):
-            print("Already Running, COPY Skip.")
-            return False
-        if check_remote_package(hostname, dev):
-            print("remote package is already copied successfully")
-            return False
-
-    # request-system-storage-cleanup
-    if args.dry_run:
-        print("dry-run: request system storage cleanup")
-    else:
-        try:
-            rpc = dev.rpc.request_system_storage_cleanup(
-                no_confirm=True, dev_timeout=60
-            )
-            # default dev_timeout is 30 seconds, but it's not enough QFX series.
-            xml_str = etree.tostring(rpc, encoding="unicode")
-            if args.debug:
-                print("copy: request-system-storage-cleanup=", xml_str)
-            if xml_str.find("<success/>") >= 0:
-                print("copy: system storage cleanup successful")
-            else:
-                print("copy: system storage cleanup failed")
-                return True
-        except RpcError as e:
-            print("system storage cleanup failure caused by RpcError:", e)
-            return True
-        except RpcTimeoutError as e:
-            print("system storage cleanup failure caused by RpcTimeoutError:", e)
-            return True
-        except Exception as e:
-            print(e)
-            return True
-
-    # copy
-    if args.dry_run:
-        print(
-            "dry-run: scp(checksum:%s) %s %s:%s"
-            % (
-                config.get(hostname, "hashalgo"),
-                get_model_file(hostname, dev.facts["model"]),
-                hostname,
-                config.get(hostname, "rpath"),
-            )
-        )
-        ret = False
-    else:
-        try:
-            sw = SW(dev)
-            result = sw.safe_copy(
-                get_model_file(hostname, dev.facts["model"]),
-                remote_path=config.get(hostname, "rpath"),
-                progress=True,
-                cleanfs=True,
-                cleanfs_timeout=300,  # default 300
-                checksum=get_model_hash(hostname, dev.facts["model"]),
-                checksum_timeout=1200,  # default 300
-                checksum_algorithm=config.get(hostname, "hashalgo"),
-                force_copy=args.force,
-            )
-            if result:
-                if args.debug:
-                    print("copy: successful")
-                ret = False
-            else:
-                if args.debug:
-                    print("copy: failed")
-                ret = True
-        except TimeoutExpiredError as e:
-            print("Copy failure caused by TimeoutExpiredError:", e)
-            ret = True
-        except RpcTimeoutError as e:
-            print("Copy failure caused by RpcTimeoutError:", e)
-            return True
-        except Exception as e:
-            print(e)
-            ret = True
-
-    if args.debug:
-        print("copy: end", ret)
-    return ret
+# --- サブコマンド用エントリ関数 ---
 
 
-def rollback(hostname, dev):
-    if args.dry_run:
-        print("dry-run: request system software rollback")
-    else:
-        try:
-            rpc = dev.rpc.request_package_rollback({"format": "text"}, dev_timeout=120)
-            # default dev_timeout is 30 seconds, but it's not enough SRX4600, MX5 and QFX5110.
-            xml_str = etree.tostring(rpc, encoding="unicode")
-            if args.debug:
-                print("rollback: rpc=", rpc, "xml_str=", xml_str)
-            if (
-                xml_str.find("Deleting bootstrap installer") >= 0  # MX
-                or xml_str.find("NOTICE: The 'pending' set has been removed") >= 0  # EX
-                or xml_str.find("will become active at next reboot") >= 0  # SRX3xx
-                or xml_str.find("Rollback of staged upgrade succeeded") >= 0  # SRX1500
-                or xml_str.find("There is NO image for ROLLBACK") >= 0  # SRX4600
-            ):
-                print(f"rollback: request system software rollback successful:\n{xml_str}")
-            else:
-                print(f"rollback: request system software rollback failed:\n{xml_str}")
-                return True
-        except RpcError as e:
-            print("request system software rollback failure caused by RpcError:", e)
-            return True
-        except RpcTimeoutError as e:
-            print(
-                "request system software rollback failure caused by RpcTimeoutError:",
-                e,
-            )
-            return True
-        except Exception as e:
-            print(e)
-            return True
-    return False
-
-
-def clear_reboot(dev) -> bool:
-    # clear system reboot
-    if args.dry_run:
-        print("\tdry-run: clear system reboot")
-    else:
-        try:
-            rpc = dev.rpc.clear_reboot({"format": "text"})
-            xml_str = etree.tostring(rpc, encoding="unicode")
-            logger.debug(f"{rpc=} {xml_str=}")
-            if (
-                xml_str.find("No shutdown/reboot scheduled.") >= 0
-                or xml_str.find("Terminating...") >= 0
-            ):
-                logger.debug("clear reboot schedule successful")
-                print("\tclear reboot schedule successful")
-            else:
-                logger.debug("clear reboot schedule failed")
-                print("\tclear reboot schedule failed")
-                return True
-        except RpcError as e:
-            logger.error(f"Clear reboot failure caused by RpcError: {e}")
-            return True
-        except RpcTimeoutError as e:
-            logger.error(f"Clear reboot failure caused by RpcTimeoutError: {e}")
-            return True
-        except Exception as e:
-            logger.error(e)
-            return True
-    return False
-
-
-def install(hostname, dev):
-    if args.debug:
-        print("install: start")
-    if args.force:
-        if args.debug:
-            print("install: force install")
-    else:
-        if check_running_package(hostname, dev):
-            print("Already Running, INSTALL Skip.")
-            return False
-
-    pending = get_pending_version(hostname, dev)
-    logger.debug(f"{pending=}")
-    if pending is not None:
-        planning = get_planning_version(hostname, dev)
-        logger.debug(f"{planning=}")
-        ret = compare_version(pending, planning)
-        logger.debug(f"install: compare_version={ret}")
-        if ret == 1:
-            logger.debug(f"{pending=} > {planning=} : No need install.")
-            print(f"\t{pending=} > {planning=} : No need install.")
-        elif ret == -1:
-            logger.debug(f"{pending=} < {planning=} : NEED INSTALL.")
-            print(f"\t{pending=} < {planning=} : NEED INSTALL.")
-        elif ret == 0:
-            logger.debug(f"{pending=} = {planning=} : No need install.")
-            print(f"\t{pending=} = {planning=} : No need install.")
-
-        if ret == 1 or ret == 0:
-            if args.force:
-                # force INSTALL
-                pass
-            else:
-                return False
-
-        ret = rollback(hostname, dev)
-        if ret:
-            if args.force:
-                pass
-            else:
-                return True
-
-    # EX series delete remote package after installed. so, must check first pending version before copy.
-    if args.dry_run and (args.copy or args.update):
-        print("dry-run: skip remote package check")
-    elif check_remote_package(hostname, dev) is not True and args.install:
-        # install() does not copy
-        logger.info("remote package file not found. Please consider --copy before --install")
-        return True
-
-    if copy(hostname, dev):
-        return True
-
-    if clear_reboot(dev):
-        return True
-
-    # request system configuration rescue save
-    if args.dry_run:
-        print("dry-run: request system configuration rescue save")
-    else:
-        cu = Config(dev)
-        try:
-            ret = cu.rescue("save")
-            if ret:
-                print("install: rescue config save successful")
-            else:
-                print("install: rescue config save failed")
-                return True
-        except ValueError as e:
-            print("wrong rescue action", e)
-            return True
-        except Exception as e:
-            print(e)
-            return True
-
-    # request system software add ...
-    if args.dry_run:
-        print(
-            "dry-run: request system software add %s/%s"
-            % (
-                config.get(hostname, "rpath"),
-                get_model_file(hostname, dev.facts["model"]),
-            )
-        )
-        ret = False
-    else:
-        sw = SW(dev)
-        status, msg = sw.install(
-            get_model_file(hostname, dev.facts["model"]),
-            remote_path=config.get(hostname, "rpath"),
-            progress=True,
-            validate=True,
-            cleanfs=True,
-            no_copy=True,
-            issu=False,
-            nssu=False,
-            timeout=2400,  # default 1800
-            cleanfs_timeout=300,  # default 300
-            checksum=get_model_hash(hostname, dev.facts["model"]),
-            checksum_timeout=1200,  # default 300
-            checksum_algorithm=config.get(hostname, "hashalgo"),
-            force_copy=args.force,
-            all_re=True,
-        )
-        del sw
-        logger.debug(f"{msg=}")
-        if status:
-            logger.info("install successful")
-            ret = False
-        else:
-            logger.info("install failed")
-            ret = True
-
-    logger.debug(f"end {ret=}")
-    return ret
-
-
-def get_model_file(hostname, model):
-    try:
-        return config.get(hostname, model.lower() + ".file")
-    except Exception as e:
-        logger.error(f"{hostname}: {model.lower()}.file not found in recipe: {e}")
-        raise
-
-
-def get_model_hash(hostname, model):
-    try:
-        return config.get(hostname, model.lower() + ".hash")
-    except Exception as e:
-        logger.error(f"{hostname}: {model.lower()}.hash not found in recipe: {e}")
-        raise
-
-
-def get_hashcache(hostname, file):
-    with config_lock:
-        if config.has_section(hostname) is False:
-            return None
-        if config.has_option(hostname, file + "hashcache"):
-            hashcache = config.get(hostname, file + "hashcache")
-        else:
-            hashcache = None
-        return hashcache
-
-
-def set_hashcache(hostname, file, value):
-    global config
-    with config_lock:
-        if config.has_section(hostname) is False:
-            # "localhost"
-            config.add_section(hostname)
-        config.set(hostname, file + "hashcache", value)
-
-
-def check_local_package(hostname, dev):
-    """check local package
-    :returns:
-       * ``True`` file found, checksum correct.
-       * ``False`` file found, checksum incorrect.
-       * ``None`` file not found.
-    """
-    # local package check
-    # model, file, hash, algo
-    model = dev.facts["model"]
-    file = get_model_file(hostname, model)
-    pkg_hash = get_model_hash(hostname, model)
-    if len(file) == 0 or len(pkg_hash) == 0:
-        return None
-    algo = config.get(hostname, "hashalgo")
-    sw = SW(dev)
-    if get_hashcache("localhost", file) == pkg_hash:
-        print(f"  - local package: {file} is found. checksum(cache) is OK.")
-        return True
-    ret = None
-    try:
-        val = sw.local_checksum(file, algorithm=algo)
-        if val == pkg_hash:
-            print(f"  - local package: {file} is found. checksum is OK.")
-            set_hashcache("localhost", file, val)
-            ret = True
-        else:
-            print(f"  - local package: {file} is found. checksum is BAD. COPY AGAIN!")
-            ret = False
-    except FileNotFoundError as e:
-        print(f"  - local package: {file} is not found.")
-        logger.debug(e)
-    except Exception as e:
-        logger.error(e)
-    del sw
-    return ret
-
-
-def check_remote_package(hostname, dev):
-    """check remote package
-    :returns:
-       * ``True`` file found, checksum correct.
-       * ``False`` file found, checksum incorrect.
-       * ``None`` file not found.
-    """
-    # remote package check
-    # model, file, hash, algo
-    model = dev.facts["model"]
-    file = get_model_file(hostname, model)
-    pkg_hash = get_model_hash(hostname, model)
-    if len(file) == 0 or len(pkg_hash) == 0:
-        return None
-    algo = config.get(hostname, "hashalgo")
-    sw = SW(dev)
-    ret = None
-    if get_hashcache(hostname, file) == pkg_hash:
-        print(f"  - remote package: {file} is found. checksum(cache) is OK.")
-        return True
-    try:
-        val = sw.remote_checksum(
-            config.get(hostname, "rpath") + "/" + file, algorithm=algo
-        )
-        if val is None:
-            print(f"  - remote package: {file} is not found.")
-        elif val == pkg_hash:
-            print(f"  - remote package: {file} is found. checksum is OK.")
-            set_hashcache(hostname, file, val)
-            ret = True
-        else:
-            print(f"  - remote package: {file} is found. checksum is BAD. COPY AGAIN!")
-            ret = False
-    except RpcError as e:
-        logger.error("Unable to remote checksum: {0}".format(e))
-    except Exception as e:
-        logger.error(e)
-    del sw
-    return ret
-
-
-def list_remote_path(hostname, dev):
-    # list remote path
-    if args.debug:
-        print("list_remote_path: start")
-    # file list /var/tmp/
-    fs = FS(dev)
-    rpath = config.get(hostname, "rpath")
-    dir_info = fs.ls(path=rpath, brief=False)
-    print(dir_info.get("path") + ":")
-    a = dir_info.get("files")
-    if args.list_format == "short":
-        for i in a.keys():
-            b = a.get(i)
-            if b.get("type") == "file":
-                print(b.get("path"))
-            else:
-                print(b.get("path") + "/")
-    else:
-        for i in a.keys():
-            b = a.get(i)
-            print(
-                "%s %s %9d %s %s"
-                % (
-                    b.get("permissions_text"),
-                    b.get("owner"),
-                    b.get("size"),
-                    b.get("ts_date"),
-                    b.get("path"),
-                )
-            )
-        print("total files: %d" % dir_info.get("file_count"))
-    if args.debug:
-        print("list_remote_path: end")
-    return dir_info
-
-
-def dry_run(hostname, dev):
-    if args.debug:
-        print("dry-run: start")
-        print("hostname: ", dev.facts["hostname"])
-        print("model: ", dev.facts["model"])
-        print("file:", get_model_file(hostname, dev.facts["model"]))
-        print("hash:", get_model_hash(hostname, dev.facts["model"]))
-        print("algo:", config.get(hostname, "hashalgo"))
-    # show hostname, model, file, hash and algo
-    # local package check
-    local = check_local_package(hostname, dev)
-    # remote package check
-    remote = check_remote_package(hostname, dev)
-    if args.debug:
-        print("dry-run: end")
-    if local and remote:
-        return True
-    else:
-        return False
-
-
-def check_running_package(hostname, dev):
-    """compare running version with planning version
-    :returns:
-       * ``True`` same(correct)
-       * ``False`` diffrent(incorrect)
-    """
-    if args.debug:
-        print("check_running_package: start")
-    ret = None
-    ver = dev.facts["version"]
-    rever = re.sub(r"\.", r"\\.", ver)
-    if args.debug:
-        print("check_running_package: ver", ver)
-        print("check_running_package: rever", rever)
-    m = re.search(rever, get_model_file(hostname, dev.facts["model"]))
-    if args.debug:
-        print("check_running_package: m", m)
-    if m is None:
-        # unmatch(different version)
-        ret = False
-    else:
-        # match(same version)
-        ret = True
-    if args.debug:
-        print("check_running_package: end")
-    return ret
-
-
-def compare_version(left: str, right: str) -> int | None:
-    """compare version left and right
-
-    :param left: version left string, ex 18.4R3-S9.2
-    :param right: version right string, ex 18.4R3-S10
-
-    :return:  1 if left  > right
-              0 if left == right
-             -1 if left  < right
-    """
-    if args.debug:
-        print(f"compare_version: left={left}, right={right}.")
-    if left is None or right is None:
-        return None
-    if LooseVersion(left.replace("-S", "00")) > LooseVersion(right.replace("-S", "00")):
+def cmd_facts(hostname) -> int:
+    """デバイス情報を表示する"""
+    err, dev = common.connect(hostname)
+    if err or dev is None:
         return 1
-    if LooseVersion(left.replace("-S", "00")) < LooseVersion(right.replace("-S", "00")):
-        return -1
-    return 0
-
-
-def get_pending_version(hostname, dev) -> str:
-    """
-    :returns:
-       * ``None`` not exist
-       * ``str`` pending version string
-    """
-    pending = None
     try:
-        rpc = dev.rpc.get_software_information({"format": "text"})
-        xml_str = etree.tostring(rpc, encoding="unicode")
-        if args.debug:
-            print(
-                "get_pending_version: rpc=", rpc, "type(xml_str)=", type(xml_str), "xml_str=", xml_str
-            )
-        if dev.facts["personality"] == "SWITCH":
-            if args.debug:
-                print("get_pending_version: EX/QFX series")
-            # Pending: 18.4R3-S10
-            m = re.search(r"^Pending:\s(.*)$", xml_str, re.MULTILINE)
-            if m is not None:
-                pending = m.group(1)
-        elif dev.facts["personality"] == "MX":
-            if args.debug:
-                print("get_pending_version: MX series")
-            # JUNOS Installation Software [18.4R3-S10]
-            m = re.search(
-                r"^JUNOS\sInstallation\sSoftware\s\[(.*)\]$", xml_str, re.MULTILINE
-            )
-            if m is not None:
-                pending = m.group(1)
-        elif dev.facts["personality"] == "SRX_BRANCH":
-            # Dual Partition - SRX300, SRX345
-            if args.debug:
-                print("get_pending_version: SRX_BRANCH series")
-            xml = dev.rpc.get_snapshot_information(media="internal")
-            if args.debug:
-                print(f"get_snapshot_information: xml={etree.dump(xml)}")
-            primary = False
-            for i in range(len(xml)):
-                if args.debug:
-                    print(
-                        f"get_snapshot_information: i={i}, tag={xml[i].tag}, text={xml[i].text}"
-                    )
-                if (
-                    xml[i].tag == "snapshot-medium"
-                    and re.match(".*primary", xml[i].text, re.MULTILINE | re.DOTALL)
-                    is not None
-                ):
-                    if args.debug:
-                        print("primary find")
-                    primary = True
-                if (
-                    primary
-                    and xml[i].tag == "software-version"
-                    and xml[i][0].tag == "package"
-                    and xml[i][0][1].tag == "package-version"
-                ):
-                    pending = xml[i][0][1].text.strip()
-                    break
-        elif (
-            dev.facts["personality"] == "SRX_MIDRANGE"
-            or dev.facts["personality"] == "SRX_HIGHEND"
-        ):
-            # SRX1500, SRX4600
-            if args.debug:
-                print("get_pending_version: SRX_MIDRANGE or SRX_HIGHEND series")
-            # show log install
-            # upgrade_platform: Staging of /var/tmp/junos-srxentedge-x86-64-20.4R3.8-linux.tgz completed
-            # &lt;package-result&gt;0&lt;/package-result&gt;
-            try:
-                rpc = dev.rpc.get_log({"format": "text"}, filename="install")
-                xml_str = etree.tostring(rpc, encoding="unicode")
-                if args.debug:
-                    print(
-                        "get_pending_version: rpc=",
-                        rpc,
-                        "type(xml_str)=",
-                        type(xml_str),
-                        "xml_str=",
-                        xml_str,
-                    )
-                if xml_str is not None:
-                    # search from last <output> block
-                    start = xml_str.rfind("&lt;output&gt;")
-                    m = re.search(
-                        r"upgrade_platform: Staging of /var/tmp/.*-(\d{2}\.\d.*\d).*\.tgz completed",
-                        xml_str[start:],
-                        re.MULTILINE,
-                    )
-                    if m is not None:
-                        pending = m.group(1).strip()
-                    m = re.search(
-                        r"&lt;package-result&gt;(\d)&lt;/package-result&gt;",
-                        xml_str[start:],
-                        re.MULTILINE,
-                    )
-                    if m is not None:
-                        if int(m.group(1)) == 0:
-                            pass
-                        else:
-                            pending = None
-            except Exception as e:
-                print(e)
-                return None
-        else:
-            print("Unknown personality:", dev.facts)
-            return None
-    except RpcError as e:
-        print("Show version failure caused by RpcError:", e)
-        return None
-    except RpcTimeoutError as e:
-        print("Show version failure caused by RpcTimeoutError:", e)
-        return None
+        print(f"# {hostname}")
+        pprint(dev.facts)
+        return 0
     except Exception as e:
-        print(e)
-        return None
-    return pending
+        logger.error(f"{hostname}: {e}")
+        return 1
+    finally:
+        try:
+            dev.close()
+        except (ConnectClosedError, Exception):
+            pass
 
 
-def get_planning_version(hostname, dev) -> str:
-    planning = None
-    f = get_model_file(hostname, dev.facts["model"])
-    m = re.search(r".*-(\d{2}\.\d.*\d).*\.tgz", f)
-    if m is not None:
-        planning = m.group(1).strip()
-    else:
-        logger.debug("get_planning_version: planning version is not found")
-    return planning
-
-
-def get_reboot_information(hostname, dev):
-    """show system reboot
-    :return: halt requested by exadmin at Sun Dec 19 08:30:00 2021
-             shutdown requested by exadmin at Sun Dec 12 08:30:00 2021
-             reboot requested by exadmin at Sun Dec  5 01:00:00 2021
-             No shutdown/reboot scheduled.
-    """
+def cmd_upgrade(hostname) -> int:
+    """コピー＋インストール"""
+    err, dev = common.connect(hostname)
+    if err or dev is None:
+        return 1
     try:
-        rpc = dev.rpc.get_reboot_information({"format": "text"})
-    except RpcError as e:
-        logger.error("Show version failure caused by RpcError:", e)
-        return None
-    except RpcTimeoutError as e:
-        logger.error("Show version failure caused by RpcTimeoutError:", e)
-        return None
+        print(f"# {hostname}")
+        if upgrade.install(hostname, dev):
+            return 1
+        return 0
     except Exception as e:
-        logger.error(e)
-        return None
-    xml_str = etree.tostring(rpc, encoding="unicode")
-    if args.debug:
-        print(xml_str)
-    m = re.search(
-        r"((halt|shutdown|reboot)\srequested\sby\s.*\sat\s(.*\d)|No\sshutdown\/reboot\sscheduled\.)",
-        xml_str,
-        re.MULTILINE,
-    )
-    if m is None:
-        return None
-    return m.group(1)
+        logger.error(f"{hostname}: {e}")
+        return 1
+    finally:
+        try:
+            dev.close()
+        except (ConnectClosedError, Exception):
+            pass
 
 
-def show_version(hostname, dev):
-    """show version
-    show running version
-    show pending version
-    check for updated
-    suggest action to copy, install, reboot or beer.
-    """
-
-    logger.debug("start")
-
-    print("  - hostname:", dev.facts["hostname"])
-    print("  - model:", dev.facts["model"])
-    running = dev.facts["version"]
-    print("  - running version:", running)
-
-    # compare with planning version
-    planning = get_planning_version(hostname, dev)
-    print("  - planning version:", planning)
-    ret = compare_version(running, planning)
-    if ret == 1:
-        print(f"    - {running=} > {planning=}")
-    elif ret == -1:
-        print(f"    - {running=} < {planning=}")
-    elif ret == 0:
-        print(f"    - {running=} = {planning=}")
-    # compare with pending version
-    pending = get_pending_version(hostname, dev)
-    print("  - pending version:", pending)
-    ret = compare_version(running, pending)
-    if ret == 1:
-        print(f"    - {running=} > {pending=} : Do you want to rollback?")
-    elif ret == -1:
-        print(f"    - {running=} < {pending=} : Please plan to reboot.")
-    elif ret == 0:
-        print(f"    - {running=} = {pending=}")
-
-    # local package check
-    local = check_local_package(hostname, dev)
-
-    # remote package check
-    remote = check_remote_package(hostname, dev)
-
-    rebooting = get_reboot_information(hostname, dev)
-    if rebooting is not None:
-        print(f"  - {rebooting}")
-
-    logger.debug("end")
-
-    return False
-
-
-def reboot(hostname: str, dev, reboot_dt: datetime.datetime):
-    logger.debug(f"{reboot_dt=}")
+def cmd_copy(hostname) -> int:
+    """コピーのみ"""
+    err, dev = common.connect(hostname)
+    if err or dev is None:
+        return 1
     try:
-        rpc = dev.rpc.get_reboot_information({"format": "text"})
-    except ConnectError as err:
-        logger.error(f"{err=}")
-        return 2
-    xml_str = etree.tostring(rpc, encoding="unicode")
-    logger.debug(f"{xml_str=}")
-    if xml_str.find("No shutdown/reboot scheduled.") >= 0:
-        pass
-    else:
-        logger.debug("ANY SHUTDWON/REBOOT SCHEDULE EXISTS")
-        match = re.search(r"^(\w+) requested by (\w+) at (.*)$", xml_str, re.MULTILINE)
-        if len(match.groups()) == 3:
-            dt = datetime.datetime.strptime(match.group(3), "%a %b %d %H:%M:%S %Y")
-            print(f"\t{match.group(1).upper()} SCHEDULE EXISTS AT {dt}")
-            if args.force:
-                logger.debug("force clear reboot")
-                print("\tforce: clear reboot")
-                if clear_reboot(dev):
-                    return 3
-            else:
-                logger.debug("skip clear reboot")
-    # reboot
-    at_str = reboot_dt.strftime("%y%m%d%H%M")
-    sw = SW(dev)
+        print(f"# {hostname}")
+        if upgrade.copy(hostname, dev):
+            return 1
+        return 0
+    except Exception as e:
+        logger.error(f"{hostname}: {e}")
+        return 1
+    finally:
+        try:
+            dev.close()
+        except (ConnectClosedError, Exception):
+            pass
+
+
+def cmd_install(hostname) -> int:
+    """インストールのみ"""
+    err, dev = common.connect(hostname)
+    if err or dev is None:
+        return 1
     try:
-        if args.dry_run:
-            msg = f"dry-run: reboot at {at_str}"
+        print(f"# {hostname}")
+        if upgrade.install(hostname, dev):
+            return 1
+        return 0
+    except Exception as e:
+        logger.error(f"{hostname}: {e}")
+        return 1
+    finally:
+        try:
+            dev.close()
+        except (ConnectClosedError, Exception):
+            pass
+
+
+def cmd_rollback(hostname) -> int:
+    """ロールバック"""
+    err, dev = common.connect(hostname)
+    if err or dev is None:
+        return 1
+    try:
+        print(f"# {hostname}")
+        pending = upgrade.get_pending_version(hostname, dev)
+        print(f"rollback: pending version is {pending}")
+        if pending is None:
+            print("rollback: skip")
         else:
-            msg = sw.reboot(at=at_str)
-    except ConnectError as e:
-        logger.error(f"{e=}")
-        return 4
-    except RpcError as e:
-        logger.error(f"{e}")
-        return 5
-    print(f"\t{msg}")
-    del sw
+            if upgrade.rollback(hostname, dev):
+                return 1
+            if not common.args.dry_run:
+                print("rollback: successful")
+        return 0
+    except Exception as e:
+        logger.error(f"{hostname}: {e}")
+        return 1
+    finally:
+        try:
+            dev.close()
+        except (ConnectClosedError, Exception):
+            pass
 
-    dev.close()
-    logger.debug("success")
-    return 0
 
-
-def yymmddhhmm_type(dt_str: str) -> datetime.datetime:
+def cmd_version(hostname) -> int:
+    """バージョン表示"""
+    err, dev = common.connect(hostname)
+    if err or dev is None:
+        return 1
     try:
-        return datetime.datetime.strptime(dt_str, "%y%m%d%H%M")
-    except ValueError as e:
-        raise argparse.ArgumentTypeError(
-            f"{e}: {dt_str} must be yymmddhhmm format. ex. 2501020304"
-        )
+        print(f"# {hostname}")
+        if upgrade.show_version(hostname, dev):
+            return 1
+        return 0
+    except Exception as e:
+        logger.error(f"{hostname}: {e}")
+        return 1
+    finally:
+        try:
+            dev.close()
+        except (ConnectClosedError, Exception):
+            pass
+
+
+def cmd_reboot(hostname) -> int:
+    """リブート"""
+    err, dev = common.connect(hostname)
+    if err or dev is None:
+        return 1
+    try:
+        print(f"# {hostname}")
+        ret = upgrade.reboot(hostname, dev, common.args.rebootat)
+        return ret
+    except Exception as e:
+        logger.error(f"{hostname}: {e}")
+        return 1
+    finally:
+        try:
+            dev.close()
+        except (ConnectClosedError, Exception):
+            pass
+
+
+def cmd_ls(hostname) -> int:
+    """リモートファイル一覧"""
+    err, dev = common.connect(hostname)
+    if err or dev is None:
+        return 1
+    try:
+        print(f"# {hostname}")
+        upgrade.list_remote_path(hostname, dev)
+        return 0
+    except Exception as e:
+        logger.error(f"{hostname}: {e}")
+        return 1
+    finally:
+        try:
+            dev.close()
+        except (ConnectClosedError, Exception):
+            pass
+
+
+# --- 後方互換: process_host ---
 
 
 def process_host(hostname: str) -> int:
-    """単一ホストの処理。戻り値: 0=成功, 非0=エラー"""
+    """単一ホストの処理（後方互換）。戻り値: 0=成功, 非0=エラー"""
+    import datetime
     logger.debug(f"{hostname=}")
     logger.debug(f"{datetime.datetime.now()=}")
     print(f"# {hostname}")
@@ -913,24 +255,22 @@ def process_host(hostname: str) -> int:
 
     try:
         if (
-            args.list_format is None
-            and args.copy is False
-            and args.install is False
-            and args.update is False
-            and args.showversion is False
-            and args.rollback is False
-            and args.rebootat is None
-        ) or args.debug:
+            common.args.list_format is None
+            and common.args.copy is False
+            and common.args.install is False
+            and common.args.update is False
+            and common.args.showversion is False
+            and common.args.rollback is False
+            and common.args.rebootat is None
+        ) or common.args.debug:
             pprint(dev.facts)
-        if args.list_format is not None:
+        if common.args.list_format is not None:
             list_remote_path(hostname, dev)
-        # copy or update
-        if args.copy:
+        if common.args.copy:
             err = copy(hostname, dev)
             if err:
                 return 1
-        # rollback
-        if args.rollback:
+        if common.args.rollback:
             pending = get_pending_version(hostname, dev)
             print(f"rollback: pending version is {pending}")
             if pending is None:
@@ -940,21 +280,18 @@ def process_host(hostname: str) -> int:
                 if err:
                     return 1
                 else:
-                    if args.dry_run is False:
+                    if common.args.dry_run is False:
                         print("rollback: successful")
-        # install or update
-        if args.install or args.update:
+        if common.args.install or common.args.update:
             err = install(hostname, dev)
             if err:
                 return 1
-        # show version
-        if args.showversion:
+        if common.args.showversion:
             err = show_version(hostname, dev)
             if err:
                 return 1
-        # reboot at
-        if args.rebootat:
-            ret = reboot(hostname, dev, args.rebootat)
+        if common.args.rebootat:
+            ret = reboot(hostname, dev, common.args.rebootat)
             if ret:
                 return ret
         return 0
@@ -969,125 +306,185 @@ def process_host(hostname: str) -> int:
         print("")
 
 
+# --- メイン ---
+
+
 def main():
-    parser = argparse.ArgumentParser(
-        description="automatically detect Juniper models and automatically update JUNOS packages",
-        epilog="default action is show device facts",
-    )
-    parser.add_argument(
-        "specialhosts",
-        metavar="hostname",
-        type=str,
-        nargs="*",
-        help="special hostname(s)",
-    )
-    parser.add_argument(
-        "-c",
-        "--config",
-        default=None,
-        type=str,
+    # 共通オプション用の親パーサー
+    parent = argparse.ArgumentParser(add_help=False)
+    parent.add_argument(
+        "-c", "--config", default=None, type=str,
         help="config filename (default: config.ini or ~/.config/junos-ops/config.ini)",
     )
-    parser.add_argument(
-        "--list",
-        "--short",
-        "-ls",
-        action="store_const",
-        dest="list_format",
-        const="short",
-        help="short list remote path (like as ls)",
+    parent.add_argument(
+        "-n", "--dry-run", action="store_true",
+        help="connect and message output. No execute.",
     )
-    parser.add_argument(
-        "--longlist",
-        "-ll",
-        action="store_const",
-        dest="list_format",
-        const="long",
-        help="long list remote path (like as ls -l)",
+    parent.add_argument("-d", "--debug", action="store_true", help="debug output")
+    parent.add_argument(
+        "--force", action="store_true", help="force execute",
     )
-    parser.add_argument(
-        "--dry-run",
-        "-n",
-        action="store_true",
-        help="test for --copy/--install/--update. connect and message output. No execute.",
+    parent.add_argument(
+        "--workers", type=int, default=None,
+        help="parallel workers (default: 1 for upgrade, 20 for rsi)",
     )
-    parser.add_argument(
-        "--copy", action="store_true", help="copy package from local to remote"
+
+    parser = argparse.ArgumentParser(
+        description="junos-ops: Juniper Networks デバイス管理ツール",
+        epilog="サブコマンド省略時はデバイス情報を表示します",
     )
-    parser.add_argument(
-        "--install", action="store_true", help="install copied package on remote"
+    parser.add_argument("--version", action="version", version="%(prog)s " + version)
+    subparsers = parser.add_subparsers(dest="subcommand")
+
+    # upgrade
+    p_upgrade = subparsers.add_parser(
+        "upgrade", parents=[parent], help="copy and install package",
     )
-    parser.add_argument(
-        "--update",
-        "--upgrade",
-        action="store_true",
-        help="copy(=--copy) and install(=--install)",
+    p_upgrade.add_argument("specialhosts", metavar="hostname", nargs="*")
+
+    # copy
+    p_copy = subparsers.add_parser(
+        "copy", parents=[parent], help="copy package to remote",
     )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="force execute copy, install and update",
+    p_copy.add_argument("specialhosts", metavar="hostname", nargs="*")
+
+    # install
+    p_install = subparsers.add_parser(
+        "install", parents=[parent], help="install copied package",
     )
-    parser.add_argument(
-        "--showversion",
-        "--version",
-        action="store_true",
-        help="show running/planning/pending version and reboot schedule",
+    p_install.add_argument("specialhosts", metavar="hostname", nargs="*")
+
+    # rollback
+    p_rollback = subparsers.add_parser(
+        "rollback", parents=[parent], help="rollback installed package",
     )
-    parser.add_argument(
-        "--rollback", action="store_true", help="rollback installed package"
+    p_rollback.add_argument("specialhosts", metavar="hostname", nargs="*")
+
+    # version
+    p_version = subparsers.add_parser(
+        "version", parents=[parent], help="show device version",
     )
-    parser.add_argument(
-        "--rebootat",
-        default=None,
-        type=yymmddhhmm_type,
-        help="reboot at Date and Time. format is yymmddhhmm. ex: 2501020304",
+    p_version.add_argument("specialhosts", metavar="hostname", nargs="*")
+
+    # reboot
+    p_reboot = subparsers.add_parser(
+        "reboot", parents=[parent], help="reboot device",
     )
-    parser.add_argument("-d", "--debug", action="store_true", help="for debug")
-    parser.add_argument("-V", action="version", version="%(prog)s " + version)
-    global args
+    p_reboot.add_argument(
+        "--at", dest="rebootat", required=True,
+        type=upgrade.yymmddhhmm_type,
+        help="reboot at yymmddhhmm (e.g. 2501020304)",
+    )
+    p_reboot.add_argument("specialhosts", metavar="hostname", nargs="*")
+
+    # ls
+    p_ls = subparsers.add_parser(
+        "ls", parents=[parent], help="list remote files",
+    )
+    p_ls.add_argument(
+        "-l", action="store_const", dest="list_format", const="long", default="short",
+        help="long format (like ls -l)",
+    )
+    p_ls.add_argument("specialhosts", metavar="hostname", nargs="*")
+
+    # rsi
+    p_rsi = subparsers.add_parser(
+        "rsi", parents=[parent], help="collect RSI/SCF",
+    )
+    p_rsi.add_argument(
+        "--rsi-dir", dest="rsi_dir", default=None,
+        help="output directory for RSI/SCF files",
+    )
+    p_rsi.add_argument("specialhosts", metavar="hostname", nargs="*")
+
+    # サブコマンドなし → device facts 表示
+    # argparse はサブコマンドなしで positional args を受け取れないため、
+    # 引数がサブコマンドに一致しない場合は facts として扱う
     args = parser.parse_args()
-    if args.config is None:
-        args.config = get_default_config()
+
+    # サブコマンドなしの場合の処理
+    if args.subcommand is None:
+        # サブコマンドなしで hostname が指定されたケースを処理
+        # 例: junos-ops hostname1 hostname2
+        remaining = sys.argv[1:]
+        if remaining and not remaining[0].startswith("-"):
+            # 親パーサーで再パース
+            facts_parser = argparse.ArgumentParser(parents=[parent], add_help=False)
+            facts_parser.add_argument("specialhosts", metavar="hostname", nargs="*")
+            args = facts_parser.parse_args()
+            args.subcommand = None
+        else:
+            # オプションのみ or 引数なし
+            if not remaining:
+                parser.print_help()
+                return 0
+            # -c や -d 等のオプションのみ → facts として解釈
+            facts_parser = argparse.ArgumentParser(parents=[parent], add_help=False)
+            facts_parser.add_argument("specialhosts", metavar="hostname", nargs="*")
+            try:
+                args = facts_parser.parse_args()
+            except SystemExit:
+                parser.print_help()
+                return 0
+            args.subcommand = None
+
+    # 後方互換属性の設定
+    if not hasattr(args, "list_format"):
+        args.list_format = None
+    if not hasattr(args, "rebootat"):
+        args.rebootat = None
+    if not hasattr(args, "rsi_dir"):
+        args.rsi_dir = None
+    # process_host 互換用
+    args.copy = False
+    args.install = False
+    args.update = False
+    args.showversion = False
+    args.rollback = False
+
+    common.args = args
+    if common.args.config is None:
+        common.args.config = common.get_default_config()
 
     logger.debug("start")
 
-    if read_config():
-        print(args.config, "is not ready")
+    if common.read_config():
+        print(common.args.config, "is not ready")
         sys.exit(1)
 
-    targets = []
-    if len(args.specialhosts) == 0:
-        for i in config.sections():
-            tmp = config.get(i, "host")
-            logger.debug(f"{i=} {tmp=}")
-            if tmp is not None:
-                targets.append(i)
-            else:
-                print(i, "is not found in", args.config)
-                sys.exit(1)
-    else:
-        for i in args.specialhosts:
-            if config.has_section(i):
-                tmp = config.get(i, "host")
-            else:
-                print(i, "is not found in", args.config)
-                sys.exit(1)
-            logger.debug(f"{i=} {tmp=}")
-            targets.append(i)
+    targets = common.get_targets()
 
-    logger.debug(f"{args=}")
-    logger.debug(f"{args.specialhosts=}")
-    logger.debug(f"{targets=}")
+    # workers のデフォルト値設定
+    if common.args.workers is None:
+        if args.subcommand == "rsi":
+            common.args.workers = 20
+        else:
+            common.args.workers = 1
 
-    for host in targets:
-        ret = process_host(host)
+    # サブコマンドのディスパッチ
+    dispatch = {
+        "upgrade": cmd_upgrade,
+        "copy": cmd_copy,
+        "install": cmd_install,
+        "rollback": cmd_rollback,
+        "version": cmd_version,
+        "reboot": cmd_reboot,
+        "ls": cmd_ls,
+        "rsi": rsi.cmd_rsi,
+        None: cmd_facts,
+    }
+
+    func = dispatch.get(args.subcommand, cmd_facts)
+    results = common.run_parallel(func, targets, max_workers=common.args.workers)
+
+    # いずれかのホストが非0を返したら非0で終了
+    for host, ret in results.items():
         if ret != 0:
+            logger.debug(f"{host} returned {ret}")
             sys.exit(ret)
 
     logger.debug("end")
-
-    return False
+    return 0
 
 
 if __name__ == "__main__":

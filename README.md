@@ -8,8 +8,10 @@ Juniperデバイスのモデルを自動検出し、JUNOSパッケージを自�
 - SCP転送＋チェックサム検証による安全なパッケージコピー
 - インストール前のパッケージ検証（validate）
 - ロールバック対応（MX/EX/SRXモデル別処理）
-- スケジュールリブート（`--rebootat`）
+- スケジュールリブート
+- RSI/SCF の並列収集
 - ドライランモード（`--dry-run`）で事前確認
+- ThreadPoolExecutor による並列実行
 - 設定ファイル（INI形式）によるホスト・パッケージ管理
 
 ## 目次
@@ -86,6 +88,8 @@ sshkey = id_ed25519   # SSH秘密鍵ファイル
 port = 830            # NETCONFポート
 hashalgo = md5        # チェックサムアルゴリズム
 rpath = /var/tmp      # リモートパス
+# huge_tree = true    # 大きなXMLレスポンスを許可
+# RSI_DIR = ./rsi/    # RSI/SCFファイルの出力先
 
 # モデル名.file = パッケージファイル名
 # モデル名.hash = チェックサム値
@@ -116,148 +120,122 @@ EX4300-32F.hash = 353a0dbd8ff6a088a593ec246f8de4f4
 ## 使い方
 
 ```
-junos-ops [-h] [-c CONFIG] [--list] [--longlist] [-n] [--dry-run]
-             [--copy] [--install] [--update] [--force] [--showversion]
-             [--rollback] [--rebootat REBOOTAT] [-d] [-V]
-             [hostname ...]
+junos-ops <subcommand> [options] [hostname ...]
 ```
 
-### オプション一覧
+### サブコマンド一覧
+
+| サブコマンド | 説明 |
+|-------------|------|
+| `upgrade` | コピー＋インストールを一括実行 |
+| `copy` | ローカルからリモートへパッケージをコピー |
+| `install` | コピー済みパッケージをインストール |
+| `rollback` | 前バージョンにロールバック |
+| `version` | running/planning/pendingバージョンとリブート予定を表示 |
+| `reboot --at YYMMDDHHMM` | 指定日時にリブートをスケジュール |
+| `ls [-l]` | リモートパスのファイル一覧 |
+| `rsi` | RSI/SCF を並列収集 |
+| （なし） | デバイスファクト（device facts）を表示 |
+
+### 共通オプション
 
 | オプション | 説明 |
 |-----------|------|
 | `hostname` | 対象ホスト名（省略時は設定ファイル内の全ホスト） |
 | `-c`, `--config CONFIG` | 設定ファイル指定（デフォルト: `config.ini` → `~/.config/junos-ops/config.ini`） |
-| `--copy` | ローカルからリモートへパッケージをコピー |
-| `--install` | コピー済みパッケージをインストール |
-| `--update`, `--upgrade` | コピー＋インストールを一括実行 |
-| `--force` | 条件を無視して強制実行 |
-| `--showversion`, `--version` | running/planning/pendingバージョンとリブート予定を表示 |
-| `--rollback` | 前バージョンにロールバック |
-| `--rebootat YYMMDDHHMM` | 指定日時にリブートをスケジュール（例: `2501020304`） |
-| `--list`, `-ls` | リモートパスのファイル一覧（短縮表示） |
-| `--longlist`, `-ll` | リモートパスのファイル一覧（詳細表示） |
 | `-n`, `--dry-run` | テスト実行（接続とメッセージ出力のみ、実行しない） |
 | `-d`, `--debug` | デバッグ出力 |
-| `-V` | プログラムバージョン表示 |
-
-引数なしで実行するとデバイスファクト（device facts）を表示します。
+| `--force` | 条件を無視して強制実行 |
+| `--workers N` | 並列実行数（デフォルト: upgrade系=1, rsi=20） |
+| `--version` | プログラムバージョン表示 |
 
 ## ワークフロー
 
 JUNOSアップデートの典型的な作業フローです。
 
 ```
-1. --dry-run で事前確認
-   junos-ops --update --dry-run hostname
+1. dry-run で事前確認
+   junos-ops upgrade -n hostname
 
-2. --update でコピー＋インストール（--copy + --install）
-   junos-ops --update hostname
+2. upgrade でコピー＋インストール
+   junos-ops upgrade hostname
 
-3. --showversion でバージョン確認
-   junos-ops --showversion hostname
+3. version でバージョン確認
+   junos-ops version hostname
 
-4. --rebootat でリブート日時を指定
-   junos-ops --rebootat 2506130500 hostname
+4. reboot でリブート日時を指定
+   junos-ops reboot --at 2506130500 hostname
 ```
 
-問題が発生した場合は `--rollback` で前バージョンに戻せます。
+問題が発生した場合は `rollback` で前バージョンに戻せます。
 
 ## 実行例
 
-### --update（パッケージ更新）
+### upgrade（パッケージ更新）
 
 ```
-% junos-ops --update rt1.example.jp
-[rt1.example.jp]
+% junos-ops upgrade rt1.example.jp
+# rt1.example.jp
 remote: jinstall-ppc-18.4R3-S10-signed.tgz is not found.
 copy: system storage cleanup successful
 rt1.example.jp: cleaning filesystem ...
-rt1.example.jp: before copy, computing checksum on remote package: /var/tmp/jinstall-ppc-18.4R3-S10-signed.tgz
-rt1.example.jp: b'jinstall-ppc-18.4R3-S10-signed.tgz': 38010880 / 380102074 (10%)
-...
 rt1.example.jp: b'jinstall-ppc-18.4R3-S10-signed.tgz': 380102074 / 380102074 (100%)
-rt1.example.jp: after copy, computing checksum on remote package: /var/tmp/jinstall-ppc-18.4R3-S10-signed.tgz
 rt1.example.jp: checksum check passed.
 install: clear reboot schedule successful
-install: rescue config save suecessful
-rt1.example.jp: validating software against current config, please be patient ...
+install: rescue config save successful
 rt1.example.jp: software validate package-result: 0
 ```
 
-### --showversion（バージョン確認）
+### version（バージョン確認）
 
 ```
-% junos-ops --showversion
-[rt1.example.jp]
-hostname: rt1
-model: MX5-T
-running version: 18.4R3-S7.2
-planning version: 18.4R3-S10
- 	running version seems older than planning version.
-	pending version: 18.4R3-S10
-running version seems older than pending version. Please plan to reboot.
-local package: jinstall-ppc-18.4R3-S10-signed.tgz is found. checksum is OK.
-remote package: jinstall-ppc-18.4R3-S10-signed.tgz is found. checksum is OK.
-reboot requested by exadmin at Sat Dec  4 05:00:00 2021
-
-[rt2.example.jp]
-hostname: rt2
-model: EX3400-24T
-running version: 18.4R3-S9.2
-planning version: 18.4R3-S10
-	running version seems older than planning version.
-pending version: 18.4R3-S10
-	running version seems older than pending version. Please plan to reboot.
-local package: junos-arm-32-18.4R3-S10.tgz is found. checksum is OK.
-remote package: junos-arm-32-18.4R3-S10.tgz is not found.
-reboot requested by exadmin at Wed Dec  8 01:00:00 2021
+% junos-ops version rt1.example.jp
+# rt1.example.jp
+  - hostname: rt1
+  - model: MX5-T
+  - running version: 18.4R3-S7.2
+  - planning version: 18.4R3-S10
+    - running='18.4R3-S7.2' < planning='18.4R3-S10'
+  - pending version: 18.4R3-S10
+    - running='18.4R3-S7.2' < pending='18.4R3-S10' : Please plan to reboot.
+  - reboot requested by exadmin at Sat Dec  4 05:00:00 2021
 ```
 
-### --dry-run（テスト実行）
+### rsi（RSI/SCF並列収集）
 
 ```
-% junos-ops --update --dry-run srx.example.jp
-[srx.example.jp]
-remote package: junos-srxentedge-x86-64-18.4R3-S9.2.tgz is not found.
-dry-run: request system storage cleanup
-dry-run: scp(cheksum:md5) junos-srxentedge-x86-64-18.4R3-S9.2.tgz srx.example.jp:/var/tmp
-dry-run: clear system reboot
-dry-run: request system configuration rescue save
-dry-run: request system software add /var/tmp/junos-srxentedge-x86-64-18.4R3-S9.2.tgz
+% junos-ops rsi --workers 5 rt1.example.jp rt2.example.jp
+# rt1.example.jp
+  rt1.example.jp.SCF done
+  rt1.example.jp.RSI done
+# rt2.example.jp
+  rt2.example.jp.SCF done
+  rt2.example.jp.RSI done
 ```
 
-### --rebootat（スケジュールリブート）
+### reboot（スケジュールリブート）
 
 ```
-% junos-ops --rebootat 2506130500 --force
-[INFO]main - host='rt1.example.jp'
-[INFO]reboot - Shutdown at Fri Jun 13 05:00:00 2025. [pid 97978]
-
-[INFO]main - host='rt2.example.jp'
-[INFO]reboot - ANY SHUTDWON/REBOOT SCHEDULE EXISTS
-[INFO]reboot - force clear reboot
-[INFO]clear_reboot - clear reboot schedule successful
-[INFO]reboot - Shutdown at Fri Jun 13 05:00:00 2025. [pid 3321]
+% junos-ops reboot --at 2506130500 rt1.example.jp
+# rt1.example.jp
+	Shutdown at Fri Jun 13 05:00:00 2025. [pid 97978]
 ```
 
 ### 引数なし（デバイスファクト表示）
 
 ```
 % junos-ops gw1.example.jp
-[gw1.example.jp]
+# gw1.example.jp
 {'2RE': True,
  'hostname': 'gw1',
  'model': 'MX240',
  'version': '18.4R3-S7.2',
- 'version_RE0': '18.4R3-S7.2',
- 'version_RE1': '18.4R3-S7.2',
  ...}
 ```
 
 ## 対応モデル
 
-レシピファイルでモデル名とパッケージファイルを定義することで、任意のJuniperモデルに対応できます。設定例に含まれるモデル:
+設定ファイルでモデル名とパッケージファイルを定義することで、任意のJuniperモデルに対応できます。設定例に含まれるモデル:
 
 | シリーズ | モデル例 |
 |---------|---------|
