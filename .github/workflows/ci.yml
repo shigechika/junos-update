@@ -29,3 +29,6 @@ jobs:
 
       - name: Run tests
         run: pytest tests/ -v --tb=short
+
+      - name: Build package
+        run: pip install build && python -m build
