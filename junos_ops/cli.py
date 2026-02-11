@@ -62,6 +62,7 @@ check_and_reinstall = upgrade.check_and_reinstall
 show_version = upgrade.show_version
 reboot = upgrade.reboot
 yymmddhhmm_type = upgrade.yymmddhhmm_type
+load_config = upgrade.load_config
 
 # common モジュールの関数への参照（後方互換）
 get_default_config = common.get_default_config
@@ -214,6 +215,26 @@ def cmd_reboot(hostname) -> int:
         print(f"# {hostname}")
         ret = upgrade.reboot(hostname, dev, common.args.rebootat)
         return ret
+    except Exception as e:
+        logger.error(f"{hostname}: {e}")
+        return 1
+    finally:
+        try:
+            dev.close()
+        except (ConnectClosedError, Exception):
+            pass
+
+
+def cmd_config(hostname) -> int:
+    """set コマンドファイルを適用"""
+    err, dev = common.connect(hostname)
+    if err or dev is None:
+        return 1
+    try:
+        print(f"# {hostname}")
+        if upgrade.load_config(hostname, dev, common.args.configfile):
+            return 1
+        return 0
     except Exception as e:
         logger.error(f"{hostname}: {e}")
         return 1
@@ -391,6 +412,20 @@ def main():
     )
     p_ls.add_argument("specialhosts", metavar="hostname", nargs="*")
 
+    # config
+    p_config = subparsers.add_parser(
+        "config", parents=[parent], help="push set command file to devices",
+    )
+    p_config.add_argument(
+        "-f", "--file", dest="configfile", required=True,
+        help="path to set command file",
+    )
+    p_config.add_argument(
+        "--confirm", dest="confirm_timeout", type=int, default=1,
+        help="commit confirm timeout in minutes (default: 1)",
+    )
+    p_config.add_argument("specialhosts", metavar="hostname", nargs="*")
+
     # rsi
     p_rsi = subparsers.add_parser(
         "rsi", parents=[parent], help="collect RSI/SCF",
@@ -439,6 +474,10 @@ def main():
         args.rebootat = None
     if not hasattr(args, "rsi_dir"):
         args.rsi_dir = None
+    if not hasattr(args, "configfile"):
+        args.configfile = None
+    if not hasattr(args, "confirm_timeout"):
+        args.confirm_timeout = 1
     # process_host 互換用
     args.copy = False
     args.install = False
@@ -474,6 +513,7 @@ def main():
         "version": cmd_version,
         "reboot": cmd_reboot,
         "ls": cmd_ls,
+        "config": cmd_config,
         "rsi": rsi.cmd_rsi,
         None: cmd_facts,
     }

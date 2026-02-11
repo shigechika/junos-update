@@ -134,6 +134,7 @@ junos-ops <subcommand> [options] [hostname ...]
 | `version` | running/planning/pendingバージョンとリブート予定を表示 |
 | `reboot --at YYMMDDHHMM` | 指定日時にリブートをスケジュール |
 | `ls [-l]` | リモートパスのファイル一覧 |
+| `config -f FILE [--confirm N]` | set コマンドファイルを適用 |
 | `rsi` | RSI/SCF を並列収集 |
 | （なし） | デバイスファクト（device facts）を表示 |
 
@@ -168,6 +169,16 @@ JUNOSアップデートの典型的な作業フローです。
 ```
 
 問題が発生した場合は `rollback` で前バージョンに戻せます。
+
+### config 適用ワークフロー
+
+```
+1. dry-run で差分を確認
+   junos-ops config -f commands.set -n hostname
+
+2. 適用
+   junos-ops config -f commands.set hostname
+```
 
 ## 実行例
 
@@ -220,6 +231,40 @@ rt1.example.jp: software validate package-result: 0
 # rt1.example.jp
 	Shutdown at Fri Jun 13 05:00:00 2025. [pid 97978]
 ```
+
+### config（set コマンドファイル適用）
+
+set 形式のコマンドファイルを複数デバイスに適用します。commit check → commit confirmed → confirm の安全なコミットフローで実行します。
+
+```
+% cat add-user.set
+set system login user viewer class read-only
+set system login user viewer authentication ssh-ed25519 "ssh-ed25519 AAAA..."
+
+% junos-ops config -f add-user.set -n rt1.example.jp rt2.example.jp
+# rt1.example.jp
+[edit system login]
++    user viewer {
++        class read-only;
++        authentication {
++            ssh-ed25519 "ssh-ed25519 AAAA...";
++        }
++    }
+	dry-run: rollback (no commit)
+# rt2.example.jp
+	...
+
+% junos-ops config -f add-user.set rt1.example.jp rt2.example.jp
+# rt1.example.jp
+	...
+	commit check passed
+	commit confirmed 1 applied
+	commit confirmed, changes are now permanent
+# rt2.example.jp
+	...
+```
+
+`--confirm N` で commit confirmed のタイムアウトを変更できます（デフォルト: 1分）。
 
 ### 引数なし（デバイスファクト表示）
 
