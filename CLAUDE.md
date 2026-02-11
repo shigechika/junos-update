@@ -71,8 +71,8 @@ LICENSE
 - `list_remote_path()` — リモートファイル一覧
 
 ### rsi.py — RSI/SCF収集
-- RSI = Request Support Information（`request support information`）
-- SCF = Show Configuration | display set（`show configuration | display set`）
+- RSI = request support information
+- SCF = show configuration | display set
 - `get_support_information()` — 機種別タイムアウト設定でRSI取得
 - `cmd_rsi()` — 1ホストのSCF+RSI収集→ファイル出力
 
