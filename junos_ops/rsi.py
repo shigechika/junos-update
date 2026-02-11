@@ -59,8 +59,14 @@ def cmd_rsi(hostname) -> int:
     rsi_dir = common.config.get(hostname, "RSI_DIR", fallback="./")
 
     try:
-        # show configuration | display set → SCF ファイル
-        output_str = dev.cli("show configuration | display set")
+        # show configuration → SCF ファイル
+        display_style = common.config.get(hostname, "DISPLAY_STYLE",
+                                          fallback="display set")
+        if display_style:
+            scf_cmd = f"show configuration | {display_style}"
+        else:
+            scf_cmd = "show configuration"
+        output_str = dev.cli(scf_cmd)
         scf_path = f"{rsi_dir}{hostname}.SCF"
         with open(scf_path, mode="w") as f:
             f.write(output_str.strip())

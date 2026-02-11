@@ -74,7 +74,7 @@ LICENSE
 - RSI = request support information
 - SCF = show configuration | display set
 - `get_support_information()` — 機種別タイムアウト設定でRSI取得
-- `cmd_rsi()` — 1ホストのSCF+RSI収集→ファイル出力
+- `cmd_rsi()` — 1ホストのSCF+RSI収集→ファイル出力（DISPLAY_STYLEで出力形式変更可能）
 
 ### cli.py — サブコマンドルーティング
 - `main()` — argparse サブコマンド定義、ディスパッチ
@@ -124,6 +124,8 @@ hashalgo = md5        # チェックサムアルゴリズム
 rpath = /var/tmp      # リモートパス
 # huge_tree = true    # 大きなXMLレスポンスを許可
 # RSI_DIR = ./rsi/    # RSI/SCFファイル出力先
+# DISPLAY_STYLE = display set   # SCF出力形式（デフォルト: display set）
+# DISPLAY_STYLE =               # 空にすると show configuration のみ（stanza形式）
 ```
 
 ### モデル→パッケージマッピング
@@ -147,7 +149,7 @@ host = 192.0.2.1           # IPアドレスでオーバーライド
 pytest tests/ -v --tb=short
 ```
 
-97テスト（バージョン比較、設定読込、接続モック、process_host統合テスト、reboot・config変更検出・snapshot削除、config push、RSI収集モック、並列実行、スレッド安全性）。
+100テスト（バージョン比較、設定読込、接続モック、process_host統合テスト、reboot・config変更検出・snapshot削除、config push、RSI収集モック・DISPLAY_STYLE、並列実行、スレッド安全性）。
 
 ### ビルド検証
 

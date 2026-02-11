@@ -181,6 +181,79 @@ class TestCmdRsi:
         assert result == 1
         mock_dev.close.assert_called_once()
 
+    def test_custom_display_style(self, junos_common, mock_args, mock_config, tmp_path):
+        """DISPLAY_STYLE 設定でカスタムコマンドが使われる"""
+        mock_config.set("test-host", "RSI_DIR", str(tmp_path) + "/")
+        mock_config.set("test-host", "DISPLAY_STYLE",
+                        "display set | display omit")
+        mock_dev = MagicMock()
+        mock_dev.cli.return_value = "  set system host-name test  \n"
+        rsi_xml = etree.Element("output")
+        rsi_xml.text = "RSI text"
+        mock_dev.rpc.get_support_information.return_value = rsi_xml
+        mock_dev.facts = {
+            "personality": "MX",
+            "model": "MX204",
+            "model_info": {"MX204": {}},
+            "hostname": "test-host",
+            "srx_cluster": None,
+        }
+
+        with patch.object(rsi.common, "connect", return_value=(False, mock_dev)):
+            result = rsi.cmd_rsi("test-host")
+
+        assert result == 0
+        mock_dev.cli.assert_called_once_with(
+            "show configuration | display set | display omit"
+        )
+
+    def test_default_display_style(self, junos_common, mock_args, mock_config, tmp_path):
+        """DISPLAY_STYLE 未設定時はデフォルトの display set が使われる"""
+        mock_config.set("test-host", "RSI_DIR", str(tmp_path) + "/")
+        mock_dev = MagicMock()
+        mock_dev.cli.return_value = "config output"
+        rsi_xml = etree.Element("output")
+        rsi_xml.text = "RSI text"
+        mock_dev.rpc.get_support_information.return_value = rsi_xml
+        mock_dev.facts = {
+            "personality": "MX",
+            "model": "MX204",
+            "model_info": {"MX204": {}},
+            "hostname": "test-host",
+            "srx_cluster": None,
+        }
+
+        with patch.object(rsi.common, "connect", return_value=(False, mock_dev)):
+            result = rsi.cmd_rsi("test-host")
+
+        assert result == 0
+        mock_dev.cli.assert_called_once_with(
+            "show configuration | display set"
+        )
+
+    def test_empty_display_style(self, junos_common, mock_args, mock_config, tmp_path):
+        """DISPLAY_STYLE が空の場合は stanza 形式（show configuration のみ）"""
+        mock_config.set("test-host", "RSI_DIR", str(tmp_path) + "/")
+        mock_config.set("test-host", "DISPLAY_STYLE", "")
+        mock_dev = MagicMock()
+        mock_dev.cli.return_value = "system { host-name test; }"
+        rsi_xml = etree.Element("output")
+        rsi_xml.text = "RSI text"
+        mock_dev.rpc.get_support_information.return_value = rsi_xml
+        mock_dev.facts = {
+            "personality": "MX",
+            "model": "MX204",
+            "model_info": {"MX204": {}},
+            "hostname": "test-host",
+            "srx_cluster": None,
+        }
+
+        with patch.object(rsi.common, "connect", return_value=(False, mock_dev)):
+            result = rsi.cmd_rsi("test-host")
+
+        assert result == 0
+        mock_dev.cli.assert_called_once_with("show configuration")
+
     def test_default_rsi_dir(self, junos_common, mock_args, mock_config):
         """RSI_DIR 未設定時は ./ がデフォルト"""
         mock_dev = MagicMock()
