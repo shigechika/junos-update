@@ -964,3 +964,74 @@ def yymmddhhmm_type(dt_str: str) -> datetime.datetime:
         raise argparse.ArgumentTypeError(
             f"{e}: {dt_str} must be yymmddhhmm format. ex. 2501020304"
         )
+
+
+def load_config(hostname, dev, configfile) -> bool:
+    """set コマンドファイルをロードしてコミットする
+
+    commit フロー: lock → load → diff → commit_check → commit confirmed → confirm → unlock
+    エラー時は rollback + unlock でクリーンアップ。
+
+    :param hostname: ホスト名（表示用）
+    :param dev: PyEZ Device インスタンス
+    :param configfile: set コマンドファイルのパス
+    :return: True=エラー, False=正常
+    """
+    cu = Config(dev)
+
+    # config ロック取得
+    try:
+        cu.lock()
+    except Exception as e:
+        logger.error(f"{hostname}: config lock failed: {e}")
+        print(f"\tconfig lock failed: {e}")
+        return True
+
+    try:
+        # set コマンドファイル読み込み
+        cu.load(path=configfile, format="set")
+
+        # 差分確認
+        diff = cu.diff()
+        if diff is None:
+            print("\tno changes")
+            cu.unlock()
+            return False
+
+        cu.pdiff()
+
+        # dry-run: diff 表示のみで終了
+        if common.args.dry_run:
+            print("\tdry-run: rollback (no commit)")
+            cu.rollback()
+            cu.unlock()
+            return False
+
+        # validation
+        cu.commit_check()
+        print("\tcommit check passed")
+
+        # commit confirmed（自動ロールバック付き）
+        confirm_timeout = getattr(common.args, "confirm_timeout", 1)
+        cu.commit(confirm=confirm_timeout)
+        print(f"\tcommit confirmed {confirm_timeout} applied")
+
+        # 確定（タイマー解除）
+        cu.commit()
+        print("\tcommit confirmed, changes are now permanent")
+
+    except Exception as e:
+        logger.error(f"{hostname}: config push failed: {e}")
+        print(f"\tconfig push failed: {e}")
+        try:
+            cu.rollback()
+        except Exception:
+            pass
+        try:
+            cu.unlock()
+        except Exception:
+            pass
+        return True
+
+    cu.unlock()
+    return False
