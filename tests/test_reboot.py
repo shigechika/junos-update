@@ -148,3 +148,41 @@ class TestRebootWithReinstall:
         with patch.object(junos_upgrade, "check_and_reinstall", return_value=True):
             result = junos_upgrade.reboot("test-host", dev, reboot_dt)
         assert result == 6
+
+
+class TestDeleteSnapshots:
+    """delete_snapshots() のテスト"""
+
+    def test_switch_personality(self, junos_upgrade, mock_args):
+        """personality=SWITCH で RPC が呼ばれる"""
+        dev = MagicMock()
+        dev.facts = {"personality": "SWITCH"}
+        result = junos_upgrade.delete_snapshots(dev)
+        assert result is False
+        dev.rpc.request_snapshot.assert_called_once_with(delete="*", dev_timeout=60)
+
+    def test_non_switch_personality(self, junos_upgrade, mock_args):
+        """personality=MX では RPC が呼ばれない"""
+        dev = MagicMock()
+        dev.facts = {"personality": "MX"}
+        result = junos_upgrade.delete_snapshots(dev)
+        assert result is False
+        dev.rpc.request_snapshot.assert_not_called()
+
+    def test_dry_run(self, junos_upgrade, mock_args):
+        """dry-run 時は RPC が呼ばれない"""
+        mock_args.dry_run = True
+        dev = MagicMock()
+        dev.facts = {"personality": "SWITCH"}
+        result = junos_upgrade.delete_snapshots(dev)
+        assert result is False
+        dev.rpc.request_snapshot.assert_not_called()
+
+    def test_rpc_error_non_fatal(self, junos_upgrade, mock_args):
+        """RPC エラー時でも False を返す（致命的でない）"""
+        from jnpr.junos.exception import RpcError
+        dev = MagicMock()
+        dev.facts = {"personality": "SWITCH"}
+        dev.rpc.request_snapshot.side_effect = RpcError()
+        result = junos_upgrade.delete_snapshots(dev)
+        assert result is False

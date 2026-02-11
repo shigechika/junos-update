@@ -21,6 +21,35 @@ from junos_ops import common
 logger = getLogger(__name__)
 
 
+def delete_snapshots(dev) -> bool:
+    """EX/QFXシリーズのスナップショットを全削除する
+
+    :return: True=エラー, False=正常（SWITCH以外は何もせず False）
+    """
+    if dev.facts.get("personality") != "SWITCH":
+        return False
+
+    if common.args.dry_run:
+        print("dry-run: request system snapshot delete *")
+        return False
+
+    try:
+        rpc = dev.rpc.request_snapshot(delete="*", dev_timeout=60)
+        xml_str = etree.tostring(rpc, encoding="unicode")
+        logger.debug(f"delete_snapshots: {xml_str}")
+        print("copy: snapshot delete successful")
+    except RpcError as e:
+        logger.warning(f"snapshot delete: RpcError: {e}")
+        print(f"copy: snapshot delete skipped (RpcError: {e})")
+    except RpcTimeoutError as e:
+        logger.warning(f"snapshot delete: RpcTimeoutError: {e}")
+        print(f"copy: snapshot delete skipped (RpcTimeoutError: {e})")
+    except Exception as e:
+        logger.warning(f"snapshot delete: {e}")
+        print(f"copy: snapshot delete skipped ({e})")
+    return False
+
+
 def copy(hostname, dev):
     if common.args.debug:
         print("copy: start")
@@ -61,6 +90,9 @@ def copy(hostname, dev):
         except Exception as e:
             print(e)
             return True
+
+    # EX/QFXシリーズ: スナップショット削除でディスク容量を確保
+    delete_snapshots(dev)
 
     # copy
     if common.args.dry_run:
