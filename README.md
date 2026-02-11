@@ -1,4 +1,4 @@
-# junos-update
+# junos-ops
 
 Juniperデバイスのモデルを自動検出し、JUNOSパッケージを自動更新するツールです。
 
@@ -9,13 +9,13 @@ Juniperデバイスのモデルを自動検出し、JUNOSパッケージを自�
 - インストール前のパッケージ検証（validate）
 - ロールバック対応（MX/EX/SRXモデル別処理）
 - スケジュールリブート（`--rebootat`）
-- ドライランモード（`--dryrun`）で事前確認
-- レシピファイル（INI形式）によるホスト・パッケージ管理
+- ドライランモード（`--dry-run`）で事前確認
+- 設定ファイル（INI形式）によるホスト・パッケージ管理
 
 ## 目次
 
 - [インストール](#インストール)
-- [レシピファイル（junos.ini）](#レシピファイルjunosini)
+- [設定ファイル（config.ini）](#設定ファイルconfigini)
 - [使い方](#使い方)
 - [ワークフロー](#ワークフロー)
 - [実行例](#実行例)
@@ -25,9 +25,17 @@ Juniperデバイスのモデルを自動検出し、JUNOSパッケージを自�
 ## インストール
 
 ```bash
+pip install git+https://github.com/shigechika/junos-ops.git
+```
+
+### 開発用インストール
+
+```bash
+git clone https://github.com/shigechika/junos-ops.git
+cd junos-ops
 python3 -m venv .venv
 . .venv/bin/activate
-pip3 install -r requirements.txt
+pip install -e ".[test]"
 ```
 
 ### 依存ライブラリ
@@ -57,9 +65,14 @@ pip3 install -r requirements.txt
 
 </details>
 
-## レシピファイル（junos.ini）
+## 設定ファイル（config.ini）
 
 INI形式の設定ファイルで、接続情報とモデル別パッケージを定義します。
+
+設定ファイルは以下の順序で探索されます（`-c` / `--config` で明示指定も可能）：
+
+1. カレントディレクトリの `./config.ini`
+2. `~/.config/junos-ops/config.ini`（XDG_CONFIG_HOME）
 
 ### DEFAULTセクション
 
@@ -103,7 +116,7 @@ EX4300-32F.hash = 353a0dbd8ff6a088a593ec246f8de4f4
 ## 使い方
 
 ```
-junos-update [-h] [--recipe RECIPE] [--list] [--longlist] [--dryrun]
+junos-ops [-h] [-c CONFIG] [--list] [--longlist] [-n] [--dry-run]
              [--copy] [--install] [--update] [--force] [--showversion]
              [--rollback] [--rebootat REBOOTAT] [-d] [-V]
              [hostname ...]
@@ -113,8 +126,8 @@ junos-update [-h] [--recipe RECIPE] [--list] [--longlist] [--dryrun]
 
 | オプション | 説明 |
 |-----------|------|
-| `hostname` | 対象ホスト名（省略時はレシピ内の全ホスト） |
-| `--recipe RECIPE` | レシピファイル指定（デフォルト: `junos.ini`） |
+| `hostname` | 対象ホスト名（省略時は設定ファイル内の全ホスト） |
+| `-c`, `--config CONFIG` | 設定ファイル指定（デフォルト: `config.ini` → `~/.config/junos-ops/config.ini`） |
 | `--copy` | ローカルからリモートへパッケージをコピー |
 | `--install` | コピー済みパッケージをインストール |
 | `--update`, `--upgrade` | コピー＋インストールを一括実行 |
@@ -124,7 +137,7 @@ junos-update [-h] [--recipe RECIPE] [--list] [--longlist] [--dryrun]
 | `--rebootat YYMMDDHHMM` | 指定日時にリブートをスケジュール（例: `2501020304`） |
 | `--list`, `-ls` | リモートパスのファイル一覧（短縮表示） |
 | `--longlist`, `-ll` | リモートパスのファイル一覧（詳細表示） |
-| `--dryrun` | テスト実行（接続とメッセージ出力のみ、実行しない） |
+| `-n`, `--dry-run` | テスト実行（接続とメッセージ出力のみ、実行しない） |
 | `-d`, `--debug` | デバッグ出力 |
 | `-V` | プログラムバージョン表示 |
 
@@ -135,17 +148,17 @@ junos-update [-h] [--recipe RECIPE] [--list] [--longlist] [--dryrun]
 JUNOSアップデートの典型的な作業フローです。
 
 ```
-1. --dryrun で事前確認
-   junos-update --update --dryrun hostname
+1. --dry-run で事前確認
+   junos-ops --update --dry-run hostname
 
 2. --update でコピー＋インストール（--copy + --install）
-   junos-update --update hostname
+   junos-ops --update hostname
 
 3. --showversion でバージョン確認
-   junos-update --showversion hostname
+   junos-ops --showversion hostname
 
 4. --rebootat でリブート日時を指定
-   junos-update --rebootat 2506130500 hostname
+   junos-ops --rebootat 2506130500 hostname
 ```
 
 問題が発生した場合は `--rollback` で前バージョンに戻せます。
@@ -155,7 +168,7 @@ JUNOSアップデートの典型的な作業フローです。
 ### --update（パッケージ更新）
 
 ```
-% junos-update --update rt1.example.jp
+% junos-ops --update rt1.example.jp
 [rt1.example.jp]
 remote: jinstall-ppc-18.4R3-S10-signed.tgz is not found.
 copy: system storage cleanup successful
@@ -175,7 +188,7 @@ rt1.example.jp: software validate package-result: 0
 ### --showversion（バージョン確認）
 
 ```
-% junos-update --showversion
+% junos-ops --showversion
 [rt1.example.jp]
 hostname: rt1
 model: MX5-T
@@ -201,23 +214,23 @@ remote package: junos-arm-32-18.4R3-S10.tgz is not found.
 reboot requested by exadmin at Wed Dec  8 01:00:00 2021
 ```
 
-### --dryrun（テスト実行）
+### --dry-run（テスト実行）
 
 ```
-% junos-update --update --dryrun srx.example.jp
+% junos-ops --update --dry-run srx.example.jp
 [srx.example.jp]
 remote package: junos-srxentedge-x86-64-18.4R3-S9.2.tgz is not found.
-dryrun: request system storage cleanup
-dryrun: scp(cheksum:md5) junos-srxentedge-x86-64-18.4R3-S9.2.tgz srx.example.jp:/var/tmp
-dryrun: clear system reboot
-dryrun: request system configuration rescue save
-dryrun: request system software add /var/tmp/junos-srxentedge-x86-64-18.4R3-S9.2.tgz
+dry-run: request system storage cleanup
+dry-run: scp(cheksum:md5) junos-srxentedge-x86-64-18.4R3-S9.2.tgz srx.example.jp:/var/tmp
+dry-run: clear system reboot
+dry-run: request system configuration rescue save
+dry-run: request system software add /var/tmp/junos-srxentedge-x86-64-18.4R3-S9.2.tgz
 ```
 
 ### --rebootat（スケジュールリブート）
 
 ```
-% junos-update --rebootat 2506130500 --force
+% junos-ops --rebootat 2506130500 --force
 [INFO]main - host='rt1.example.jp'
 [INFO]reboot - Shutdown at Fri Jun 13 05:00:00 2025. [pid 97978]
 
@@ -231,7 +244,7 @@ dryrun: request system software add /var/tmp/junos-srxentedge-x86-64-18.4R3-S9.2
 ### 引数なし（デバイスファクト表示）
 
 ```
-% junos-update gw1.example.jp
+% junos-ops gw1.example.jp
 [gw1.example.jp]
 {'2RE': True,
  'hostname': 'gw1',

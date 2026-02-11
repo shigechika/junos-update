@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- mode: python; python-indent-offset: 4 -*-
 #
 #   Copyright ©︎2022-2025 AIKAWA Shigechika
 #
@@ -52,18 +50,34 @@ else:
     )
 logger = logging.getLogger(__name__)
 
+from junos_ops import __version__ as version
+
 config = None
 config_lock = threading.Lock()
 args = None
-version = "0.2"
+
+DEFAULT_CONFIG = "config.ini"
+
+
+def get_default_config():
+    """設定ファイルのデフォルトパスを探索順に返す"""
+    # カレントディレクトリ
+    if os.path.isfile(DEFAULT_CONFIG):
+        return DEFAULT_CONFIG
+    # XDG_CONFIG_HOME（未設定なら ~/.config）
+    xdg = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
+    xdg_path = os.path.join(xdg, "junos-ops", DEFAULT_CONFIG)
+    if os.path.isfile(xdg_path):
+        return xdg_path
+    return DEFAULT_CONFIG
 
 
 def read_config():
     global config
     config = configparser.ConfigParser(allow_no_value=True)
-    config.read(args.recipe)
+    config.read(args.config)
     if len(config.sections()) == 0:
-        print(args.recipe, "is empty")
+        print(args.config, "is empty")
         return True
     for section in config.sections():
         if config.has_option(section, "host"):
@@ -140,8 +154,8 @@ def copy(hostname, dev):
             return False
 
     # request-system-storage-cleanup
-    if args.dryrun:
-        print("dryrun: request system storage cleanup")
+    if args.dry_run:
+        print("dry-run: request system storage cleanup")
     else:
         try:
             rpc = dev.rpc.request_system_storage_cleanup(
@@ -167,9 +181,9 @@ def copy(hostname, dev):
             return True
 
     # copy
-    if args.dryrun:
+    if args.dry_run:
         print(
-            "dryrun: scp(checksum:%s) %s %s:%s"
+            "dry-run: scp(checksum:%s) %s %s:%s"
             % (
                 config.get(hostname, "hashalgo"),
                 get_model_file(hostname, dev.facts["model"]),
@@ -216,8 +230,8 @@ def copy(hostname, dev):
 
 
 def rollback(hostname, dev):
-    if args.dryrun:
-        print("dryrun: request system software rollback")
+    if args.dry_run:
+        print("dry-run: request system software rollback")
     else:
         try:
             rpc = dev.rpc.request_package_rollback({"format": "text"}, dev_timeout=120)
@@ -253,8 +267,8 @@ def rollback(hostname, dev):
 
 def clear_reboot(dev) -> bool:
     # clear system reboot
-    if args.dryrun:
-        print("\tdryrun: clear system reboot")
+    if args.dry_run:
+        print("\tdry-run: clear system reboot")
     else:
         try:
             rpc = dev.rpc.clear_reboot({"format": "text"})
@@ -325,8 +339,8 @@ def install(hostname, dev):
                 return True
 
     # EX series delete remote package after installed. so, must check first pending version before copy.
-    if args.dryrun and (args.copy or args.update):
-        print("dryrun: skip remote package check")
+    if args.dry_run and (args.copy or args.update):
+        print("dry-run: skip remote package check")
     elif check_remote_package(hostname, dev) is not True and args.install:
         # install() does not copy
         logger.info("remote package file not found. Please consider --copy before --install")
@@ -339,8 +353,8 @@ def install(hostname, dev):
         return True
 
     # request system configuration rescue save
-    if args.dryrun:
-        print("dryrun: request system configuration rescue save")
+    if args.dry_run:
+        print("dry-run: request system configuration rescue save")
     else:
         cu = Config(dev)
         try:
@@ -358,9 +372,9 @@ def install(hostname, dev):
             return True
 
     # request system software add ...
-    if args.dryrun:
+    if args.dry_run:
         print(
-            "dryrun: request system software add %s/%s"
+            "dry-run: request system software add %s/%s"
             % (
                 config.get(hostname, "rpath"),
                 get_model_file(hostname, dev.facts["model"]),
@@ -550,9 +564,9 @@ def list_remote_path(hostname, dev):
     return dir_info
 
 
-def dryrun(hostname, dev):
+def dry_run(hostname, dev):
     if args.debug:
-        print("dryrun: start")
+        print("dry-run: start")
         print("hostname: ", dev.facts["hostname"])
         print("model: ", dev.facts["model"])
         print("file:", get_model_file(hostname, dev.facts["model"]))
@@ -564,7 +578,7 @@ def dryrun(hostname, dev):
     # remote package check
     remote = check_remote_package(hostname, dev)
     if args.debug:
-        print("dryrun: end")
+        print("dry-run: end")
     if local and remote:
         return True
     else:
@@ -860,8 +874,8 @@ def reboot(hostname: str, dev, reboot_dt: datetime.datetime):
     at_str = reboot_dt.strftime("%y%m%d%H%M")
     sw = SW(dev)
     try:
-        if args.dryrun:
-            msg = f"dryrun: reboot at {at_str}"
+        if args.dry_run:
+            msg = f"dry-run: reboot at {at_str}"
         else:
             msg = sw.reboot(at=at_str)
     except ConnectError as e:
@@ -926,7 +940,7 @@ def process_host(hostname: str) -> int:
                 if err:
                     return 1
                 else:
-                    if args.dryrun is False:
+                    if args.dry_run is False:
                         print("rollback: successful")
         # install or update
         if args.install or args.update:
@@ -968,10 +982,11 @@ def main():
         help="special hostname(s)",
     )
     parser.add_argument(
-        "--recipe",
-        default="junos.ini",
+        "-c",
+        "--config",
+        default=None,
         type=str,
-        help="junos recipe filename (default: %(default)s)",
+        help="config filename (default: config.ini or ~/.config/junos-ops/config.ini)",
     )
     parser.add_argument(
         "--list",
@@ -991,7 +1006,8 @@ def main():
         help="long list remote path (like as ls -l)",
     )
     parser.add_argument(
-        "--dryrun",
+        "--dry-run",
+        "-n",
         action="store_true",
         help="test for --copy/--install/--update. connect and message output. No execute.",
     )
@@ -1031,11 +1047,13 @@ def main():
     parser.add_argument("-V", action="version", version="%(prog)s " + version)
     global args
     args = parser.parse_args()
+    if args.config is None:
+        args.config = get_default_config()
 
     logger.debug("start")
 
     if read_config():
-        print(args.recipe, "is not ready")
+        print(args.config, "is not ready")
         sys.exit(1)
 
     targets = []
@@ -1046,14 +1064,14 @@ def main():
             if tmp is not None:
                 targets.append(i)
             else:
-                print(i, "is not found in", args.recipe)
+                print(i, "is not found in", args.config)
                 sys.exit(1)
     else:
         for i in args.specialhosts:
             if config.has_section(i):
                 tmp = config.get(i, "host")
             else:
-                print(i, "is not found in", args.recipe)
+                print(i, "is not found in", args.config)
                 sys.exit(1)
             logger.debug(f"{i=} {tmp=}")
             targets.append(i)
@@ -1073,4 +1091,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main())  # pragma: no cover

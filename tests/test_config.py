@@ -1,9 +1,38 @@
 """設定読込・モデル取得・ハッシュキャッシュのテスト"""
 
 import configparser
+import os
 import threading
 
 import pytest
+
+
+class TestGetDefaultConfig:
+    """get_default_config() のテスト"""
+
+    def test_current_dir(self, junos_update, tmp_path, monkeypatch):
+        """カレントディレクトリの config.ini を優先する"""
+        (tmp_path / "config.ini").write_text("[DEFAULT]\n")
+        monkeypatch.chdir(tmp_path)
+        result = junos_update.get_default_config()
+        assert result == "config.ini"
+
+    def test_xdg_config_home(self, junos_update, tmp_path, monkeypatch):
+        """XDG_CONFIG_HOME 配下の config.ini を検出する"""
+        xdg_dir = tmp_path / "xdg" / "junos-ops"
+        xdg_dir.mkdir(parents=True)
+        (xdg_dir / "config.ini").write_text("[DEFAULT]\n")
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        monkeypatch.chdir(tmp_path / "xdg")  # config.ini がないディレクトリ
+        result = junos_update.get_default_config()
+        assert result == str(xdg_dir / "config.ini")
+
+    def test_fallback(self, junos_update, tmp_path, monkeypatch):
+        """どこにも見つからない場合は config.ini を返す"""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "empty"))
+        result = junos_update.get_default_config()
+        assert result == "config.ini"
 
 
 class TestReadConfig:
@@ -22,7 +51,7 @@ class TestReadConfig:
             "[host2.example.jp]\n"
             "host = 192.0.2.1\n"
         )
-        junos_update.args.recipe = str(recipe)
+        junos_update.args.config = str(recipe)
         result = junos_update.read_config()
         assert result is False
         assert junos_update.config.has_section("host1.example.jp")
@@ -32,7 +61,7 @@ class TestReadConfig:
         """空のINIファイルはエラー（True）を返す"""
         recipe = tmp_path / "empty.ini"
         recipe.write_text("")
-        junos_update.args.recipe = str(recipe)
+        junos_update.args.config = str(recipe)
         result = junos_update.read_config()
         assert result is True
 
@@ -43,7 +72,7 @@ class TestReadConfig:
             "[DEFAULT]\nid = testuser\nport = 830\n\n"
             "[rt1.example.jp]\n"
         )
-        junos_update.args.recipe = str(recipe)
+        junos_update.args.config = str(recipe)
         junos_update.read_config()
         assert junos_update.config.get("rt1.example.jp", "host") == "rt1.example.jp"
 
@@ -55,7 +84,7 @@ class TestReadConfig:
             "[rt2.example.jp]\n"
             "host = 192.0.2.1\n"
         )
-        junos_update.args.recipe = str(recipe)
+        junos_update.args.config = str(recipe)
         junos_update.read_config()
         assert junos_update.config.get("rt2.example.jp", "host") == "192.0.2.1"
 

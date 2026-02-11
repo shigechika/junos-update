@@ -1,24 +1,14 @@
-import importlib.util
-import importlib.machinery
 import argparse
 import configparser
-from pathlib import Path
 import pytest
 
-# プロジェクトルートの junos-update スクリプトのパス
-SCRIPT_PATH = str(Path(__file__).resolve().parent.parent / "junos-update")
+from junos_ops import cli as junos_update_mod
 
 
 @pytest.fixture
 def junos_update():
-    """junos-update スクリプトをモジュールとしてインポート"""
-    loader = importlib.machinery.SourceFileLoader("junos_update", SCRIPT_PATH)
-    spec = importlib.util.spec_from_file_location(
-        "junos_update", SCRIPT_PATH, loader=loader
-    )
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+    """junos_ops.cli モジュールを返す"""
+    return junos_update_mod
 
 
 @pytest.fixture
@@ -26,7 +16,7 @@ def mock_args(junos_update):
     """テスト用の args グローバル変数を設定"""
     junos_update.args = argparse.Namespace(
         debug=False,
-        dryrun=False,
+        dry_run=False,
         force=False,
         copy=False,
         install=False,
@@ -35,7 +25,7 @@ def mock_args(junos_update):
         rollback=False,
         rebootat=None,
         list_format=None,
-        recipe="junos.ini",
+        config="config.ini",
     )
     return junos_update.args
 
