@@ -52,10 +52,9 @@ def read_config():
     global config
     config = configparser.ConfigParser(allow_no_value=True)
     config.read(args.recipe)
-    if args.debug:
-        if len(config.sections()) == 0:
-            print(args.recipe, "is empty")
-            return True
+    if len(config.sections()) == 0:
+        print(args.recipe, "is empty")
+        return True
     for section in config.sections():
         if config.has_option(section, "host"):
             host = config.get(section, "host")
@@ -823,11 +822,6 @@ def show_version(hostname, dev):
 
 def reboot(hostname: str, dev, reboot_dt: datetime.datetime):
     logger.debug(f"{reboot_dt=}")
-    try:
-        dev.open()
-    except ConnectError as err:
-        logger.error(f"{err=}")
-        return 1
     try:
         rpc = dev.rpc.get_reboot_information({"format": "text"})
     except ConnectError as err:
