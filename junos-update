@@ -138,10 +138,10 @@ def copy(hostname, dev):
                 no_confirm=True, dev_timeout=60
             )
             # default dev_timeout is 30 seconds, but it's not enough QFX series.
-            str = etree.tostring(rpc, encoding="unicode")
+            xml_str = etree.tostring(rpc, encoding="unicode")
             if args.debug:
-                print("copy: request-system-storage-cleanup=", str)
-            if str.find("<success/>") >= 0:
+                print("copy: request-system-storage-cleanup=", xml_str)
+            if xml_str.find("<success/>") >= 0:
                 print("copy: system storage cleanup successful")
             else:
                 print("copy: system storage cleanup failed")
@@ -212,19 +212,19 @@ def rollback(hostname, dev):
         try:
             rpc = dev.rpc.request_package_rollback({"format": "text"}, dev_timeout=120)
             # default dev_timeout is 30 seconds, but it's not enough SRX4600, MX5 and QFX5110.
-            str = etree.tostring(rpc, encoding="unicode")
+            xml_str = etree.tostring(rpc, encoding="unicode")
             if args.debug:
-                print("rollback: rpc=", rpc, "str=", str)
+                print("rollback: rpc=", rpc, "xml_str=", xml_str)
             if (
-                str.find("Deleting bootstrap installer") >= 0  # MX
-                or str.find("NOTICE: The 'pending' set has been removed") >= 0  # EX
-                or str.find("will become active at next reboot") >= 0  # SRX3xx
-                or str.find("Rollback of staged upgrade succeeded") >= 0  # SRX1500
-                or str.find("There is NO image for ROLLBACK") >= 0  # SRX4600
+                xml_str.find("Deleting bootstrap installer") >= 0  # MX
+                or xml_str.find("NOTICE: The 'pending' set has been removed") >= 0  # EX
+                or xml_str.find("will become active at next reboot") >= 0  # SRX3xx
+                or xml_str.find("Rollback of staged upgrade succeeded") >= 0  # SRX1500
+                or xml_str.find("There is NO image for ROLLBACK") >= 0  # SRX4600
             ):
-                print(f"rollback: request system software rollback successful:\n{str}")
+                print(f"rollback: request system software rollback successful:\n{xml_str}")
             else:
-                print(f"rollback: request system software rollback failed:\n{str}")
+                print(f"rollback: request system software rollback failed:\n{xml_str}")
                 return True
         except RpcError as e:
             print("request system software rollback failure caused by RpcError:", e)
@@ -248,11 +248,11 @@ def clear_reboot(dev) -> bool:
     else:
         try:
             rpc = dev.rpc.clear_reboot({"format": "text"})
-            str = etree.tostring(rpc, encoding="unicode")
-            logger.debug(f"{rpc=} {str=}")
+            xml_str = etree.tostring(rpc, encoding="unicode")
+            logger.debug(f"{rpc=} {xml_str=}")
             if (
-                str.find("No shutdown/reboot scheduled.") >= 0
-                or str.find("Terminating...") >= 0
+                xml_str.find("No shutdown/reboot scheduled.") >= 0
+                or xml_str.find("Terminating...") >= 0
             ):
                 logger.debug("clear reboot schedule successful")
                 print("\tclear reboot schedule successful")
@@ -434,18 +434,18 @@ def check_local_package(hostname, dev):
     # model, file, hash, algo
     model = dev.facts["model"]
     file = get_model_file(hostname, model)
-    hash = get_model_hash(hostname, model)
-    if len(file) == 0 or len(hash) == 0:
+    pkg_hash = get_model_hash(hostname, model)
+    if len(file) == 0 or len(pkg_hash) == 0:
         return None
     algo = config.get(hostname, "hashalgo")
     sw = SW(dev)
-    if get_hashcache("localhost", file) == hash:
+    if get_hashcache("localhost", file) == pkg_hash:
         print(f"  - local package: {file} is found. checksum(cache) is OK.")
         return True
     ret = None
     try:
         val = sw.local_checksum(file, algorithm=algo)
-        if val == hash:
+        if val == pkg_hash:
             print(f"  - local package: {file} is found. checksum is OK.")
             set_hashcache("localhost", file, val)
             ret = True
@@ -472,13 +472,13 @@ def check_remote_package(hostname, dev):
     # model, file, hash, algo
     model = dev.facts["model"]
     file = get_model_file(hostname, model)
-    hash = get_model_hash(hostname, model)
-    if len(file) == 0 or len(hash) == 0:
+    pkg_hash = get_model_hash(hostname, model)
+    if len(file) == 0 or len(pkg_hash) == 0:
         return None
     algo = config.get(hostname, "hashalgo")
     sw = SW(dev)
     ret = None
-    if get_hashcache(hostname, file) == hash:
+    if get_hashcache(hostname, file) == pkg_hash:
         print(f"  - remote package: {file} is found. checksum(cache) is OK.")
         return True
     try:
@@ -487,7 +487,7 @@ def check_remote_package(hostname, dev):
         )
         if val is None:
             print(f"  - remote package: {file} is not found.")
-        elif val == hash:
+        elif val == pkg_hash:
             print(f"  - remote package: {file} is found. checksum is OK.")
             set_hashcache(hostname, file, val)
             ret = True
@@ -509,9 +509,9 @@ def list_remote_path(hostname, dev):
     # file list /var/tmp/
     fs = FS(dev)
     rpath = config.get(hostname, "rpath")
-    dict = fs.ls(path=rpath, brief=False)
-    print(dict.get("path") + ":")
-    a = dict.get("files")
+    dir_info = fs.ls(path=rpath, brief=False)
+    print(dir_info.get("path") + ":")
+    a = dir_info.get("files")
     if args.list_format == "short":
         for i in a.keys():
             b = a.get(i)
@@ -532,10 +532,10 @@ def list_remote_path(hostname, dev):
                     b.get("path"),
                 )
             )
-        print("total files: %d" % dict.get("file_count"))
+        print("total files: %d" % dir_info.get("file_count"))
     if args.debug:
         print("list_remote_path: end")
-    return dict
+    return dir_info
 
 
 def dryrun(hostname, dev):
@@ -617,16 +617,16 @@ def get_pending_version(hostname, dev) -> str:
     pending = None
     try:
         rpc = dev.rpc.get_software_information({"format": "text"})
-        str = etree.tostring(rpc, encoding="unicode")
+        xml_str = etree.tostring(rpc, encoding="unicode")
         if args.debug:
             print(
-                "get_pending_version: rpc=", rpc, "type(str)=", type(str), "str=", str
+                "get_pending_version: rpc=", rpc, "type(xml_str)=", type(xml_str), "xml_str=", xml_str
             )
         if dev.facts["personality"] == "SWITCH":
             if args.debug:
                 print("get_pending_version: EX/QFX series")
             # Pending: 18.4R3-S10
-            m = re.search(r"^Pending:\s(.*)$", str, re.MULTILINE)
+            m = re.search(r"^Pending:\s(.*)$", xml_str, re.MULTILINE)
             if m is not None:
                 pending = m.group(1)
         elif dev.facts["personality"] == "MX":
@@ -634,7 +634,7 @@ def get_pending_version(hostname, dev) -> str:
                 print("get_pending_version: MX series")
             # JUNOS Installation Software [18.4R3-S10]
             m = re.search(
-                r"^JUNOS\sInstallation\sSoftware\s\[(.*)\]$", str, re.MULTILINE
+                r"^JUNOS\sInstallation\sSoftware\s\[(.*)\]$", xml_str, re.MULTILINE
             )
             if m is not None:
                 pending = m.group(1)
@@ -679,29 +679,29 @@ def get_pending_version(hostname, dev) -> str:
             # &lt;package-result&gt;0&lt;/package-result&gt;
             try:
                 rpc = dev.rpc.get_log({"format": "text"}, filename="install")
-                str = etree.tostring(rpc, encoding="unicode")
+                xml_str = etree.tostring(rpc, encoding="unicode")
                 if args.debug:
                     print(
                         "get_pending_version: rpc=",
                         rpc,
-                        "type(str)=",
-                        type(str),
-                        "str=",
-                        str,
+                        "type(xml_str)=",
+                        type(xml_str),
+                        "xml_str=",
+                        xml_str,
                     )
-                if str is not None:
+                if xml_str is not None:
                     # search from last <output> block
-                    start = str.rfind("&lt;output&gt;")
+                    start = xml_str.rfind("&lt;output&gt;")
                     m = re.search(
                         r"upgrade_platform: Staging of /var/tmp/.*-(\d{2}\.\d.*\d).*\.tgz completed",
-                        str[start:],
+                        xml_str[start:],
                         re.MULTILINE,
                     )
                     if m is not None:
                         pending = m.group(1).strip()
                     m = re.search(
                         r"&lt;package-result&gt;(\d)&lt;/package-result&gt;",
-                        str[start:],
+                        xml_str[start:],
                         re.MULTILINE,
                     )
                     if m is not None:
@@ -756,12 +756,12 @@ def get_reboot_information(hostname, dev):
     except Exception as e:
         logger.error(e)
         sys.exit(1)
-    str = etree.tostring(rpc, encoding="unicode")
+    xml_str = etree.tostring(rpc, encoding="unicode")
     if args.debug:
-        print(str)
+        print(xml_str)
     m = re.search(
         r"((halt|shutdown|reboot)\srequested\sby\s.*\sat\s(.*\d)|No\sshutdown\/reboot\sscheduled\.)",
-        str,
+        xml_str,
         re.MULTILINE,
     )
     if m is None:
@@ -827,13 +827,13 @@ def reboot(hostname: str, dev, reboot_dt: datetime.datetime):
     except ConnectError as err:
         logger.error(f"{err=}")
         return 2
-    str = etree.tostring(rpc, encoding="unicode")
-    logger.debug(f"{str=}")
-    if str.find("No shutdown/reboot scheduled.") >= 0:
+    xml_str = etree.tostring(rpc, encoding="unicode")
+    logger.debug(f"{xml_str=}")
+    if xml_str.find("No shutdown/reboot scheduled.") >= 0:
         pass
     else:
         logger.debug("ANY SHUTDWON/REBOOT SCHEDULE EXISTS")
-        match = re.search(r"^(\w+) requested by (\w+) at (.*)$", str, re.MULTILINE)
+        match = re.search(r"^(\w+) requested by (\w+) at (.*)$", xml_str, re.MULTILINE)
         if len(match.groups()) == 3:
             dt = datetime.datetime.strptime(match.group(3), "%a %b %d %H:%M:%S %Y")
             print(f"\t{match.group(1).upper()} SCHEDULE EXISTS AT {dt}")
