@@ -2,9 +2,10 @@
 
 import argparse
 import datetime
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
+from lxml import etree
 
 
 class TestCompareVersion:
@@ -80,4 +81,119 @@ class TestGetPlanningVersion:
         dev = MagicMock()
         dev.facts = {"model": "SRX345"}
         result = junos_upgrade.get_planning_version("test-host", dev)
+        assert result is None
+
+
+class TestGetCommitInformation:
+    """get_commit_information() のテスト"""
+
+    def _make_commit_xml(self, sequence="0", seconds="1692679960",
+                         dt_text="2023-08-22 13:12:40 JST",
+                         user="admin", client="cli"):
+        """テスト用のコミット情報 XML を生成する"""
+        root = etree.Element("commit-information")
+        history = etree.SubElement(root, "commit-history")
+        seq = etree.SubElement(history, "sequence-number")
+        seq.text = sequence
+        dt = etree.SubElement(history, "date-time")
+        dt.set("seconds", seconds)
+        dt.text = dt_text
+        u = etree.SubElement(history, "user")
+        u.text = user
+        c = etree.SubElement(history, "client")
+        c.text = client
+        return root
+
+    def test_success(self, junos_upgrade, mock_args):
+        """正常系: sequence 0 のコミット情報を取得"""
+        dev = MagicMock()
+        dev.rpc.get_commit_information.return_value = self._make_commit_xml()
+        result = junos_upgrade.get_commit_information(dev)
+        assert result is not None
+        epoch, dt_str, user, client = result
+        assert epoch == 1692679960
+        assert dt_str == "2023-08-22 13:12:40 JST"
+        assert user == "admin"
+        assert client == "cli"
+
+    def test_multiple_entries(self, junos_upgrade, mock_args):
+        """複数コミット: sequence 0 のみを返す"""
+        root = etree.Element("commit-information")
+        # sequence 0
+        h0 = etree.SubElement(root, "commit-history")
+        etree.SubElement(h0, "sequence-number").text = "0"
+        dt0 = etree.SubElement(h0, "date-time")
+        dt0.set("seconds", "2000000000")
+        dt0.text = "2033-05-18 00:00:00 JST"
+        etree.SubElement(h0, "user").text = "admin"
+        etree.SubElement(h0, "client").text = "cli"
+        # sequence 1
+        h1 = etree.SubElement(root, "commit-history")
+        etree.SubElement(h1, "sequence-number").text = "1"
+        dt1 = etree.SubElement(h1, "date-time")
+        dt1.set("seconds", "1000000000")
+        dt1.text = "2001-09-09 00:00:00 JST"
+        etree.SubElement(h1, "user").text = "root"
+        etree.SubElement(h1, "client").text = "netconf"
+
+        dev = MagicMock()
+        dev.rpc.get_commit_information.return_value = root
+        result = junos_upgrade.get_commit_information(dev)
+        assert result is not None
+        epoch, _, user, _ = result
+        assert epoch == 2000000000
+        assert user == "admin"
+
+    def test_no_history(self, junos_upgrade, mock_args):
+        """コミット履歴なし → None"""
+        root = etree.Element("commit-information")
+        dev = MagicMock()
+        dev.rpc.get_commit_information.return_value = root
+        result = junos_upgrade.get_commit_information(dev)
+        assert result is None
+
+    def test_rpc_error(self, junos_upgrade, mock_args):
+        """RPC エラー → None"""
+        from jnpr.junos.exception import RpcError
+        dev = MagicMock()
+        dev.rpc.get_commit_information.side_effect = RpcError()
+        result = junos_upgrade.get_commit_information(dev)
+        assert result is None
+
+
+class TestGetRescueConfigTime:
+    """get_rescue_config_time() のテスト"""
+
+    def _make_file_list_xml(self, seconds="1692679000"):
+        """テスト用の file-list XML を生成する"""
+        root = etree.Element("directory")
+        file_info = etree.SubElement(root, "file-information")
+        etree.SubElement(file_info, "file-name").text = "/config/rescue.conf.gz"
+        file_date = etree.SubElement(file_info, "file-date")
+        file_date.set("seconds", seconds)
+        file_date.text = "Aug 22 12:50"
+        return root
+
+    def test_success(self, junos_upgrade, mock_args):
+        """正常系: epoch 秒を取得"""
+        dev = MagicMock()
+        dev.rpc.file_list.return_value = self._make_file_list_xml("1692679000")
+        result = junos_upgrade.get_rescue_config_time(dev)
+        assert result == 1692679000
+
+    def test_no_file(self, junos_upgrade, mock_args):
+        """ファイルなし → None"""
+        root = etree.Element("directory")
+        etree.SubElement(root, "output").text = "/config/rescue.conf.gz: No such file or directory"
+        dev = MagicMock()
+        dev.rpc.file_list.return_value = root
+        result = junos_upgrade.get_rescue_config_time(dev)
+        assert result is None
+
+    def test_rpc_error(self, junos_upgrade, mock_args):
+        """RPC エラー → None"""
+        from jnpr.junos.exception import RpcError
+        dev = MagicMock()
+        dev.rpc.file_list.side_effect = RpcError()
+        result = junos_upgrade.get_rescue_config_time(dev)
         assert result is None
