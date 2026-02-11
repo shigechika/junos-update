@@ -33,6 +33,7 @@ tests/
 ├── test_version.py # バージョン関連関数のテスト
 ├── test_process_host.py # process_host統合テスト（後方互換）
 ├── test_parallel.py    # 並列実行・ターゲット決定のテスト
+├── test_reboot.py      # reboot・config変更検出・snapshot削除のテスト
 └── test_rsi.py     # RSI/SCF収集のテスト
 pyproject.toml      # パッケージメタデータ、エントリポイント
 config.ini          # 設定ファイル（設定例）
@@ -52,13 +53,17 @@ LICENSE
 - `run_parallel()` — ThreadPoolExecutorラッパー（max_workers=1でシリアル実行）
 
 ### upgrade.py — パッケージ操作
-- `copy()` — SCP転送＋チェックサム検証
+- `delete_snapshots()` — EX/QFXシリーズのスナップショット全削除（ディスク容量確保）
+- `copy()` — SCP転送＋チェックサム検証（storage cleanup + snapshot delete 付き）
 - `install()` — パッケージインストール（pre/postフライトチェック）
 - `rollback()` — 前バージョンへの復帰
-- `reboot()` — スケジュールリブート
-- `show_version()` — バージョン情報表示
+- `reboot()` — スケジュールリブート（config変更検出時は自動再インストール）
+- `show_version()` — バージョン情報表示（config変更警告付き）
 - `get_model_file()` / `get_model_hash()` — モデル→パッケージマッピング
 - `get_pending_version()` / `get_planning_version()` / `compare_version()` — バージョン比較
+- `get_commit_information()` — 最新コミット情報取得（epoch秒、ユーザー、クライアント）
+- `get_rescue_config_time()` — rescue config ファイルの更新時刻取得
+- `check_and_reinstall()` — config変更検出＋validation付き自動再インストール
 - `get_hashcache()` / `set_hashcache()` — チェックサムキャッシュ（スレッド安全）
 - `list_remote_path()` — リモートファイル一覧
 
@@ -136,7 +141,7 @@ host = 192.0.2.1           # IPアドレスでオーバーライド
 pytest tests/ -v --tb=short
 ```
 
-67テスト（バージョン比較、設定読込、接続モック、process_host統合テスト、RSI収集モック、並列実行、スレッド安全性）。
+89テスト（バージョン比較、設定読込、接続モック、process_host統合テスト、reboot・config変更検出・snapshot削除、RSI収集モック、並列実行、スレッド安全性）。
 
 ## 既知の注意事項
 
