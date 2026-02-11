@@ -11,9 +11,10 @@ Juniperデバイスのモデルを自動検出し、JUNOSパッケージを自�
 - インストール前のパッケージ検証（validate）
 - ロールバック対応（MX/EX/SRXモデル別処理）
 - スケジュールリブート
-- RSI/SCF の並列収集
+- RSI（Request Support Information）/ SCF（Show Configuration | display set）の並列収集
 - ドライランモード（`--dry-run`）で事前確認
 - ThreadPoolExecutor による並列実行
+- config サブコマンドの並列実行対応（`--workers` で並列数指定）
 - 設定ファイル（INI形式）によるホスト・パッケージ管理
 
 ## 目次

@@ -11,10 +11,10 @@ A tool for automatic detection of Juniper device models and automated JUNOS pack
 - Pre-install package validation
 - Rollback support (model-specific handling for MX/EX/SRX)
 - Scheduled reboot
-- Parallel RSI/SCF collection
+- Parallel RSI (Request Support Information) / SCF (Show Configuration | display set) collection
 - Dry-run mode (`--dry-run`) for pre-flight verification
 - Parallel execution via ThreadPoolExecutor
-- Configuration push with commit confirmed safety
+- Configuration push with commit confirmed safety (parallel execution supported)
 - INI-based host and package management
 
 ## Table of Contents
