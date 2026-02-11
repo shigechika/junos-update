@@ -1,3 +1,3 @@
 """junos-ops: Juniper Networks デバイス運用ツール"""
 
-__version__ = "0.4"
+__version__ = "0.5"
