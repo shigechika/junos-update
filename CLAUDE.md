@@ -4,7 +4,7 @@
 
 ## プロジェクト概要
 
-junos-opsは、Juniper Networksデバイスの運用を自動化するPythonツールです。デバイスモデルの自動検出、JUNOSパッケージの自動更新、ロールバック、リブートスケジュール管理をNETCONF/SSH経由で行います。
+junos-opsは、Juniper Networksデバイスの運用を自動化するPythonツールです。デバイスモデルの自動検出、JUNOSパッケージの自動更新、ロールバック、リブートスケジュール管理、RSI/SCF収集をNETCONF/SSH経由で行います。
 
 ## 技術スタック
 
@@ -22,19 +22,71 @@ junos-opsは、Juniper Networksデバイスの運用を自動化するPythonツ�
 junos_ops/
 ├── __init__.py     # パッケージ定義、__version__
 ├── __main__.py     # python -m junos_ops 対応
-└── cli.py          # メインロジック（全関数）
+├── cli.py          # サブコマンドルーティング、argparse、main()
+├── common.py       # 共通機能（設定読込、接続管理、ターゲット決定、並列実行）
+├── upgrade.py      # upgrade系機能（コピー、インストール、ロールバック、バージョン管理）
+└── rsi.py          # RSI/SCF収集機能
 tests/
 ├── conftest.py     # pytest フィクスチャ
-├── test_version.py
-├── test_config.py
-├── test_connect.py
-└── test_process_host.py
+├── test_config.py  # 設定読込・モデル取得・ハッシュキャッシュのテスト
+├── test_connect.py # 接続モックテスト
+├── test_version.py # バージョン関連関数のテスト
+├── test_process_host.py # process_host統合テスト（後方互換）
+├── test_parallel.py    # 並列実行・ターゲット決定のテスト
+└── test_rsi.py     # RSI/SCF収集のテスト
 pyproject.toml      # パッケージメタデータ、エントリポイント
 config.ini          # 設定ファイル（設定例）
 logging.ini         # ロギング設定
 README.md
 LICENSE
 ```
+
+## モジュール構成
+
+### common.py — 共通機能
+- グローバル変数: `config`, `config_lock`, `args`
+- `get_default_config()` — 設定ファイルパスの探索（XDG対応）
+- `read_config()` — INIファイル読込
+- `connect()` — NETCONF接続（huge_tree対応、個別例外処理）
+- `get_targets()` — ターゲットホストリスト決定
+- `run_parallel()` — ThreadPoolExecutorラッパー（max_workers=1でシリアル実行）
+
+### upgrade.py — パッケージ操作
+- `copy()` — SCP転送＋チェックサム検証
+- `install()` — パッケージインストール（pre/postフライトチェック）
+- `rollback()` — 前バージョンへの復帰
+- `reboot()` — スケジュールリブート
+- `show_version()` — バージョン情報表示
+- `get_model_file()` / `get_model_hash()` — モデル→パッケージマッピング
+- `get_pending_version()` / `get_planning_version()` / `compare_version()` — バージョン比較
+- `get_hashcache()` / `set_hashcache()` — チェックサムキャッシュ（スレッド安全）
+- `list_remote_path()` — リモートファイル一覧
+
+### rsi.py — RSI/SCF収集
+- `get_support_information()` — 機種別タイムアウト設定でRSI取得
+- `cmd_rsi()` — 1ホストのSCF+RSI収集→ファイル出力
+
+### cli.py — サブコマンドルーティング
+- `main()` — argparse サブコマンド定義、ディスパッチ
+- `cmd_upgrade()`, `cmd_copy()`, `cmd_install()`, `cmd_rollback()`, `cmd_version()`, `cmd_reboot()`, `cmd_ls()`, `cmd_facts()` — サブコマンド用エントリ関数
+- `process_host()` — 旧CLI互換の統合処理関数
+
+## CLI設計
+
+```
+junos-ops upgrade [hostname ...]           # コピー＋インストール
+junos-ops copy [hostname ...]              # コピーだけ
+junos-ops install [hostname ...]           # インストールだけ
+junos-ops rollback [hostname ...]          # ロールバック
+junos-ops version [hostname ...]           # バージョン表示
+junos-ops reboot --at YYMMDDHHMM [hostname ...]  # リブート
+junos-ops ls [-l] [hostname ...]           # リモートファイル一覧
+junos-ops rsi [hostname ...]               # RSI/SCF収集
+junos-ops [hostname ...]                   # サブコマンド省略 → device facts 表示
+junos-ops --version                        # プログラムバージョン
+```
+
+共通オプション: `-c`, `-n`, `-d`, `--force`, `--workers N`
 
 ## 開発環境セットアップ
 
@@ -51,8 +103,6 @@ INI形式の設定ファイル。configparserで読み込む。
 
 ### DEFAULTセクション
 
-グローバルな接続情報とモデル別パッケージ定義を記述する。
-
 ```ini
 [DEFAULT]
 id = exadmin          # SSHユーザ名
@@ -61,11 +111,11 @@ sshkey = id_ed25519   # SSH秘密鍵ファイル
 port = 830            # NETCONFポート
 hashalgo = md5        # チェックサムアルゴリズム
 rpath = /var/tmp      # リモートパス
+# huge_tree = true    # 大きなXMLレスポンスを許可
+# RSI_DIR = ./rsi/    # RSI/SCFファイル出力先
 ```
 
 ### モデル→パッケージマッピング
-
-DEFAULTセクション内に`モデル名.file`と`モデル名.hash`のペアで定義する。モデル名はデバイスから自動取得される`model`フィールドと一致させる。
 
 ```ini
 EX2300-24T.file = junos-arm-32-18.4R3-S10.tgz
@@ -74,29 +124,11 @@ EX2300-24T.hash = e233b31a0b9233bc4c56e89954839a8a
 
 ### ホストセクション
 
-セクション名がホスト名となる。DEFAULTの値をホスト単位でオーバーライドできる。`host`キーを指定しない場合、セクション名がそのまま接続先ホスト名として使用される。
-
 ```ini
 [rt1.example.jp]           # hostキー省略 → rt1.example.jpに接続
 [rt2.example.jp]
 host = 192.0.2.1           # IPアドレスでオーバーライド
 ```
-
-ホストセクション内でモデル→パッケージマッピングをオーバーライドすることも可能（特定ホストだけ異なるバージョンにする場合など）。
-
-## コードの主要構成
-
-`junos_ops/cli.py` に全関数が集約されている。
-
-- **接続管理:** `connect()` — NETCONF接続（認証エラー、タイムアウト等の個別例外処理あり）
-- **パッケージ転送:** `copy()` — SCP転送＋チェックサム検証、ストレージクリーンアップ
-- **インストール:** `install()` — パッケージ検証・インストール（pre/postフライトチェック）
-- **ロールバック:** `rollback()` — 前バージョンへの復帰（MX/EX/SRXモデル別処理あり）
-- **リブート:** `reboot()` — スケジュールリブートまたは即時リブート
-- **ホスト処理:** `process_host()` — 単一ホストの全処理（ThreadPoolExecutor対応済み）
-- **バージョン管理:** `get_pending_version()`, `get_planning_version()`, `compare_version()`
-- **設定読込:** `read_config()` — config.iniの解析（XDG対応）
-- **ドライラン:** `dry_run()` — 実行せずに操作内容を表示
 
 ## テスト
 
@@ -104,10 +136,10 @@ host = 192.0.2.1           # IPアドレスでオーバーライド
 pytest tests/ -v --tb=short
 ```
 
-45テスト（バージョン比較、設定読込、接続モック、process_host統合テスト、スレッド安全性）。
+67テスト（バージョン比較、設定読込、接続モック、process_host統合テスト、RSI収集モック、並列実行、スレッド安全性）。
 
 ## 既知の注意事項
 
-- グローバル変数`config`が`logging.config`と`configparser`の両方で使われており、モジュール読込時に`config.fileConfig()`呼出し後に`config = None`で上書きされる
-- `args`と`config`はグローバル変数として管理される
+- `args`と`config`は`common`モジュールのグローバル変数として管理される
 - `config`への書き込みは`config_lock`（threading.Lock）で保護済み
+- `cli.py`の後方互換alias（`copy = upgrade.copy` 等）は将来のバージョンで削除予定

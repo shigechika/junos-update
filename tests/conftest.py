@@ -2,36 +2,51 @@ import argparse
 import configparser
 import pytest
 
+from junos_ops import common
 from junos_ops import cli as junos_update_mod
+from junos_ops import upgrade as junos_upgrade_mod
+
+
+@pytest.fixture
+def junos_common():
+    """common モジュールを返す"""
+    return common
 
 
 @pytest.fixture
 def junos_update():
-    """junos_ops.cli モジュールを返す"""
+    """junos_ops.cli モジュールを返す（後方互換）"""
     return junos_update_mod
 
 
 @pytest.fixture
-def mock_args(junos_update):
+def junos_upgrade():
+    """junos_ops.upgrade モジュールを返す"""
+    return junos_upgrade_mod
+
+
+@pytest.fixture
+def mock_args(junos_common):
     """テスト用の args グローバル変数を設定"""
-    junos_update.args = argparse.Namespace(
+    junos_common.args = argparse.Namespace(
         debug=False,
         dry_run=False,
         force=False,
+        config="config.ini",
+        list_format=None,
         copy=False,
         install=False,
         update=False,
         showversion=False,
         rollback=False,
         rebootat=None,
-        list_format=None,
-        config="config.ini",
+        specialhosts=[],
     )
-    return junos_update.args
+    return junos_common.args
 
 
 @pytest.fixture
-def mock_config(junos_update):
+def mock_config(junos_common):
     """テスト用の config グローバル変数を設定"""
     cfg = configparser.ConfigParser(allow_no_value=True)
     cfg.read_dict(
@@ -49,5 +64,5 @@ def mock_config(junos_update):
             "test-host": {"host": "192.0.2.1"},
         }
     )
-    junos_update.config = cfg
+    junos_common.config = cfg
     return cfg
