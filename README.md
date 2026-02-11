@@ -1,37 +1,28 @@
 # junos-update
-automatically detect Juniper models and automatically update JUNOS packages
 
-# usage
-```
-% junos-update --help
-usage: junos-update [-h] [--recipe RECIPE] [--list] [--longlist] [--dryrun] [--copy] [--install] [--update] [--force] [--showversion] [--rollback] [--rebootat REBOOTAT] [-d] [-V] [hostname ...]
+Juniperデバイスのモデルを自動検出し、JUNOSパッケージを自動更新するツールです。
 
-automatically detect Juniper models and automatically update JUNOS packages
+## 特徴
 
-positional arguments:
-  hostname              special hostname(s)
+- デバイスモデルの自動検出とパッケージの自動マッピング
+- SCP転送＋チェックサム検証による安全なパッケージコピー
+- インストール前のパッケージ検証（validate）
+- ロールバック対応（MX/EX/SRXモデル別処理）
+- スケジュールリブート（`--rebootat`）
+- ドライランモード（`--dryrun`）で事前確認
+- レシピファイル（INI形式）によるホスト・パッケージ管理
 
-options:
-  -h, --help            show this help message and exit
-  --recipe RECIPE       junos recipe filename (default: junos.ini)
-  --list, --short, -ls  short list remote path (like as ls)
-  --longlist, -ll       long list remote path (like as ls -l)
-  --dryrun              test for --copy/--install/--update. connect and message output. No execute.
-  --copy                copy package from local to remote
-  --install             install copied package on remote
-  --update, --upgrade   copy(=--copy) and install(=--install)
-  --force               force execute copy, install and update
-  --showversion, --version
-                        show running/planning/pending version and reboot schedule
-  --rollback            rollback installed package
-  --rebootat REBOOTAT   reboot at Date and Time. format is yymmddhhmm. ex: 2501020304
-  -d, --debug           for debug
-  -V                    show program's version number and exit
+## 目次
 
-default action is show device facts
-```
+- [インストール](#インストール)
+- [レシピファイル（junos.ini）](#レシピファイルjunosini)
+- [使い方](#使い方)
+- [ワークフロー](#ワークフロー)
+- [実行例](#実行例)
+- [対応モデル](#対応モデル)
+- [License](#license)
 
-# Install
+## インストール
 
 ```bash
 python3 -m venv .venv
@@ -39,34 +30,129 @@ python3 -m venv .venv
 pip3 install -r requirements.txt
 ```
 
-## PyEZ
+### 依存ライブラリ
 
-- requires PyEZ [https://www.juniper.net/documentation/product/us/en/junos-pyez]
+- [junos-eznc (PyEZ)](https://www.juniper.net/documentation/product/us/en/junos-pyez) — Juniper NETCONF自動化ライブラリ
+- [looseversion](https://pypi.org/project/looseversion/) — バージョン比較
+
+### pip3のインストール（未導入の場合）
+
+<details>
+<summary>OS別手順</summary>
+
+- **Ubuntu/Debian**
+  ```bash
+  sudo apt install python3-pip
+  ```
+
+- **CentOS/RedHat**
+  ```bash
+  sudo dnf install python3-pip
+  ```
+
+- **macOS**
+  ```bash
+  brew install python3
+  ```
+
+</details>
+
+## レシピファイル（junos.ini）
+
+INI形式の設定ファイルで、接続情報とモデル別パッケージを定義します。
+
+### DEFAULTセクション
+
+全ホスト共通の接続設定とモデル→パッケージマッピングを記述します。
+
+```ini
+[DEFAULT]
+id = exadmin          # SSHユーザ名
+pw = password         # SSHパスワード
+sshkey = id_ed25519   # SSH秘密鍵ファイル
+port = 830            # NETCONFポート
+hashalgo = md5        # チェックサムアルゴリズム
+rpath = /var/tmp      # リモートパス
+
+# モデル名.file = パッケージファイル名
+# モデル名.hash = チェックサム値
+EX2300-24T.file = junos-arm-32-18.4R3-S10.tgz
+EX2300-24T.hash = e233b31a0b9233bc4c56e89954839a8a
+```
+
+モデル名はデバイスから自動取得される`model`フィールドと一致させます。
+
+### ホストセクション
+
+各セクション名がホスト名になります。DEFAULTの値をホスト単位でオーバーライドできます。
+
+```ini
+[rt1.example.jp]             # セクション名がそのまま接続先ホスト名
+[rt2.example.jp]
+host = 192.0.2.1             # IPアドレスで接続先を指定
+[sw1.example.jp]
+id = sw1                     # 接続ユーザを変更
+sshkey = sw1_rsa             # SSH鍵を変更
+[sw2.example.jp]
+port = 10830                 # ポートを変更
+[sw3.example.jp]
+EX4300-32F.file = jinstall-ex-4300-20.4R3.8-signed.tgz   # このホストだけ別バージョン
+EX4300-32F.hash = 353a0dbd8ff6a088a593ec246f8de4f4
+```
+
+## 使い方
 
 ```
-% pip3 install junos-eznc
+junos-update [-h] [--recipe RECIPE] [--list] [--longlist] [--dryrun]
+             [--copy] [--install] [--update] [--force] [--showversion]
+             [--rollback] [--rebootat REBOOTAT] [-d] [-V]
+             [hostname ...]
 ```
 
-- pip3
+### オプション一覧
 
-  - Ubuntu/Debian
+| オプション | 説明 |
+|-----------|------|
+| `hostname` | 対象ホスト名（省略時はレシピ内の全ホスト） |
+| `--recipe RECIPE` | レシピファイル指定（デフォルト: `junos.ini`） |
+| `--copy` | ローカルからリモートへパッケージをコピー |
+| `--install` | コピー済みパッケージをインストール |
+| `--update`, `--upgrade` | コピー＋インストールを一括実行 |
+| `--force` | 条件を無視して強制実行 |
+| `--showversion`, `--version` | running/planning/pendingバージョンとリブート予定を表示 |
+| `--rollback` | 前バージョンにロールバック |
+| `--rebootat YYMMDDHHMM` | 指定日時にリブートをスケジュール（例: `2501020304`） |
+| `--list`, `-ls` | リモートパスのファイル一覧（短縮表示） |
+| `--longlist`, `-ll` | リモートパスのファイル一覧（詳細表示） |
+| `--dryrun` | テスト実行（接続とメッセージ出力のみ、実行しない） |
+| `-d`, `--debug` | デバッグ出力 |
+| `-V` | プログラムバージョン表示 |
+
+引数なしで実行するとデバイスファクト（device facts）を表示します。
+
+## ワークフロー
+
+JUNOSアップデートの典型的な作業フローです。
+
 ```
-sudo apt install python3-pip
+1. --dryrun で事前確認
+   junos-update --update --dryrun hostname
+
+2. --update でコピー＋インストール（--copy + --install）
+   junos-update --update hostname
+
+3. --showversion でバージョン確認
+   junos-update --showversion hostname
+
+4. --rebootat でリブート日時を指定
+   junos-update --rebootat 2506130500 hostname
 ```
 
-  - CentOS/RedHat
-```
-sudo dnf install python3-pip
-```
+問題が発生した場合は `--rollback` で前バージョンに戻せます。
 
-  - macOS
-```
-brew install python3
-```
+## 実行例
 
-# example
-
-- --update
+### --update（パッケージ更新）
 
 ```
 % junos-update --update rt1.example.jp
@@ -76,59 +162,17 @@ copy: system storage cleanup successful
 rt1.example.jp: cleaning filesystem ...
 rt1.example.jp: before copy, computing checksum on remote package: /var/tmp/jinstall-ppc-18.4R3-S10-signed.tgz
 rt1.example.jp: b'jinstall-ppc-18.4R3-S10-signed.tgz': 38010880 / 380102074 (10%)
-rt1.example.jp: b'jinstall-ppc-18.4R3-S10-signed.tgz': 76021760 / 380102074 (20%)
-rt1.example.jp: b'jinstall-ppc-18.4R3-S10-signed.tgz': 114032640 / 380102074 (30%)
-rt1.example.jp: b'jinstall-ppc-18.4R3-S10-signed.tgz': 152043520 / 380102074 (40%)
-rt1.example.jp: b'jinstall-ppc-18.4R3-S10-signed.tgz': 190054400 / 380102074 (50%)
-rt1.example.jp: b'jinstall-ppc-18.4R3-S10-signed.tgz': 228065280 / 380102074 (60%)
-rt1.example.jp: b'jinstall-ppc-18.4R3-S10-signed.tgz': 266076160 / 380102074 (70%)
-rt1.example.jp: b'jinstall-ppc-18.4R3-S10-signed.tgz': 304087040 / 380102074 (80%)
-rt1.example.jp: b'jinstall-ppc-18.4R3-S10-signed.tgz': 342097920 / 380102074 (90%)
+...
 rt1.example.jp: b'jinstall-ppc-18.4R3-S10-signed.tgz': 380102074 / 380102074 (100%)
 rt1.example.jp: after copy, computing checksum on remote package: /var/tmp/jinstall-ppc-18.4R3-S10-signed.tgz
 rt1.example.jp: checksum check passed.
 install: clear reboot schedule successful
 install: rescue config save suecessful
-rt1.example.jp: request-package-checks-pending-install rpc is not supported on given device
 rt1.example.jp: validating software against current config, please be patient ...
 rt1.example.jp: software validate package-result: 0
-Output:
-Checking compatibility with configuration
-Initializing...
-Using jbase-ppc-18.4R3-S7.2
-Verified manifest signed by PackageProductionECP256_2021 method ECDSA256+SHA256
-Using /var/tmp/jinstall-ppc-18.4R3-S10-signed.tgz
-Verified jinstall-ppc-18.4R3-S10.tgz signed by PackageProductionECP256_2021 method ECDSA256+SHA256
-Using jinstall-ppc-18.4R3-S10.tgz
-Using jbundle-ppc-18.4R3-S10.tgz
-Checking jbundle-ppc requirements on /
-Using jbase-ppc-18.4R3-S10.tgz
-Verified manifest signed by PackageProductionECP256_2021 method ECDSA256+SHA256
-Verified jbase-ppc-18.4R3-S10 signed by PackageProductionECP256_2021 method ECDSA256+SHA256
-Using /var/v/c/tmp/jbundle-ppc/jboot-ppc-18.4R3-S10.tgz
-Using jcrypto-dp-support-18.4R3-S10.tgz
-Verified manifest signed by PackageProductionECP256_2021 method ECDSA256+SHA256
-Verified jcrypto-dp-support-18.4R3-S10 signed by PackageProductionECP256_2021 method ECDSA256+SHA256
-Using jcrypto-ppc-18.4R3-S10.tgz
-Verified manifest signed by PackageProductionECP256_2021 method ECDSA256+SHA256
-Verified jcrypto-ppc-18.4R3-S10 signed by PackageProductionECP256_2021 method ECDSA256+SHA256
-Using jdocs-18.4R3-S10.tgz
-Verified manifest signed by PackageProductionECP256_2021 method ECDSA256+SHA256
-Verified jdocs-18.4R3-S10 signed by PackageProductionECP256_2021 method ECDSA256+SHA256
-Using jkernel-ppc-18.4R3-S10.tgz
-Verified manifest signed by PackageProductionECP256_2021 method ECDSA256+SHA256
-Verified jkernel-ppc-18.4R3-S10 signed by PackageProductionECP256_2021 method ECDSA256+SHA256
-Using jmacsec-18.4R3-S10.tgz
-Verified manifest signed by PackageProductionECP256_2021 method ECDSA256+SHA256
-Verified jmacsec-18.4R3-S10 signed by PackageProductionECP256_2021 method ECDSA256+SHA256
-Using jpfe-ppc-18.4R3-S10.tgz
-Verified SHA1 checksum of jpfe-ACX-18.4R3-S10.tgz
-Verified SHA1 checksum of jpfe-MX104-18.4R3-S10.tgz
-Verified SHA1 checksum of jpfe-MX80-18.4R3-S10.tgz
-Verified manifest signed by PackageProductionECP256_2021 method ECDSA256+SHA256
 ```
 
-- --showversion
+### --showversion（バージョン確認）
 
 ```
 % junos-update --showversion
@@ -155,55 +199,9 @@ pending version: 18.4R3-S10
 local package: junos-arm-32-18.4R3-S10.tgz is found. checksum is OK.
 remote package: junos-arm-32-18.4R3-S10.tgz is not found.
 reboot requested by exadmin at Wed Dec  8 01:00:00 2021
-
-[rt3.example.jp]
-hostname: rt3
-model: QFX5110-48S-4C
-running version: 18.4R3-S7.2
-planning version: 18.4R3-S10
- 	running version seems older than planning version.
-pending version: None
-local package: jinstall-host-qfx-5e-x86-64-18.4R3-S10-secure-signed.tgz is not found.
-remote package: jinstall-host-qfx-5e-x86-64-18.4R3-S10-secure-signed.tgz is not found.
-No shutdown/reboot scheduled.
-
-[sw1.example.jp]
-hostname: sw1
-model: EX2300-24T
-running version: 18.4R3-S7.2
-planning version: 18.4R3-S10
- 	running version seems older than planning version.
-	pending version: 18.4R3-S10
-running version seems older than pending version. Please plan to reboot.
-local package: junos-arm-32-18.4R3-S10.tgz is found. checksum is OK.
-remote package: junos-arm-32-18.4R3-S10.tgz is not found.
-reboot requested by sw1 at Sat Dec  4 05:00:00 2021
-
-[sw2.example.jp]
-hostname: sw2
-model: EX3400-24T
-running version: 18.4R3-S7.2
-planning version: 18.4R3-S10
-	running version seems older than planning version.
-pending version: 18.4R3-S10
-	running version seems older than pending version. Please plan to reboot.
-local package: junos-arm-32-18.4R3-S10.tgz is found. checksum is OK.
-remote package: junos-arm-32-18.4R3-S10.tgz is not found.
-shutdown requested by exadmin at Sun Dec 12 08:30:00 2021
-
-[sw3.example.jp]
-hostname: sw2
-model: EX4300-32F
-running version: 20.4R2-S2.2
-planning version: 20.4R3.8
-	running version seems older than planning version.
-pending version: None
-local package: jinstall-ex-4300-20.4R3.8-signed.tgz is found. checksum is OK.
-remote package: jinstall-ex-4300-20.4R3.8-signed.tgz is found. checksum is OK.
-shutdown requested by exadmin at Sun Dec 12 08:30:00 2021
 ```
 
-- --dryrun
+### --dryrun（テスト実行）
 
 ```
 % junos-update --update --dryrun srx.example.jp
@@ -216,89 +214,47 @@ dryrun: request system configuration rescue save
 dryrun: request system software add /var/tmp/junos-srxentedge-x86-64-18.4R3-S9.2.tgz
 ```
 
-- --rebootat
+### --rebootat（スケジュールリブート）
 
 ```
-% junos-update --reboot 2506130500 --force
+% junos-update --rebootat 2506130500 --force
 [INFO]main - host='rt1.example.jp'
 [INFO]reboot - Shutdown at Fri Jun 13 05:00:00 2025. [pid 97978]
 
 [INFO]main - host='rt2.example.jp'
 [INFO]reboot - ANY SHUTDWON/REBOOT SCHEDULE EXISTS
-[INFO]reboot - dt=datetime.datetime(2025, 7, 20, 8, 0)
 [INFO]reboot - force clear reboot
 [INFO]clear_reboot - clear reboot schedule successful
 [INFO]reboot - Shutdown at Fri Jun 13 05:00:00 2025. [pid 3321]
-
-[INFO]main - host='rt3.example.jp'
-[INFO]reboot - ANY SHUTDWON/REBOOT SCHEDULE EXISTS
-[INFO]reboot - dt=datetime.datetime(2025, 6, 27, 9, 0)
-[INFO]reboot - force clear reboot
-[INFO]clear_reboot - clear reboot schedule successful
-[INFO]reboot - Shutdown at Fri Jun 13 05:00:00 2025. [pid 49174]
 ```
 
-- default
+### 引数なし（デバイスファクト表示）
 
 ```
 % junos-update gw1.example.jp
 [gw1.example.jp]
 {'2RE': True,
- 'HOME': '/var/home/exadmin',
- 'RE0': {'last_reboot_reason': 'Router rebooted after a normal shutdown.',
-         'mastership_state': 'master',
-         'model': 'RE-S-1800x4',
-         'status': 'OK',
-         'up_time': '100 days, 10 hours, 20 minutes, 30 seconds'},
- 'RE1': {'last_reboot_reason': 'Router rebooted after a normal shutdown.',
-         'mastership_state': 'backup',
-         'model': 'RE-S-1800x4',
-         'status': 'OK',
-         'up_time': '123 days, 12 hours, 34 minutes, 56 seconds'},
- 'RE_hw_mi': False,
- 'current_re': ['re0', 'master', 'node', 'fwdd', 'member', 'pfem'],
- 'domain': None,
- 'fqdn': 'gw1',
  'hostname': 'gw1',
- 'hostname_info': {'re0': 'gw1', 're1': 'gw1'},
- 'ifd_style': 'CLASSIC',
- 'junos_info': {'re0': {'object': junos.version_info(major=(18, 4), type=R, minor=3-S7, build=2),
-                        'text': '18.4R3-S7.2'},
-                're1': {'object': junos.version_info(major=(18, 4), type=R, minor=3-S7, build=2),
-                        'text': '18.4R3-S7.2'}},
- 'master': 'RE0',
  'model': 'MX240',
- 'model_info': {'re0': 'MX240', 're1': 'MX240'},
- 'personality': 'MX',
- 're_info': {'default': {'0': {'last_reboot_reason': 'Router rebooted after a '
-                                                     'normal shutdown.',
-                               'mastership_state': 'master',
-                               'model': 'RE-S-1800x4',
-                               'status': 'OK'},
-                         '1': {'last_reboot_reason': 'Router rebooted after a '
-                                                     'normal shutdown.',
-                               'mastership_state': 'backup',
-                               'model': 'RE-S-1800x4',
-                               'status': 'OK'},
-                         'default': {'last_reboot_reason': 'Router rebooted '
-                                                           'after a normal '
-                                                           'shutdown.',
-                                     'mastership_state': 'master',
-                                     'model': 'RE-S-1800x4',
-                                     'status': 'OK'}}},
- 're_master': {'default': '0'},
- 'serialnumber': 'XXXXXXXXXXXX',
- 'srx_cluster': None,
- 'srx_cluster_id': None,
- 'srx_cluster_redundancy_group': None,
- 'switch_style': 'BRIDGE_DOMAIN',
- 'vc_capable': False,
- 'vc_fabric': None,
- 'vc_master': None,
- 'vc_mode': None,
  'version': '18.4R3-S7.2',
  'version_RE0': '18.4R3-S7.2',
  'version_RE1': '18.4R3-S7.2',
- 'version_info': junos.version_info(major=(18, 4), type=R, minor=3-S7, build=2),
- 'virtual': False}
- ```
+ ...}
+```
+
+## 対応モデル
+
+レシピファイルでモデル名とパッケージファイルを定義することで、任意のJuniperモデルに対応できます。設定例に含まれるモデル:
+
+| シリーズ | モデル例 |
+|---------|---------|
+| EX | EX2300-24T, EX3400-24T, EX4300-32F |
+| MX | MX5-T, MX240 |
+| QFX | QFX5110-48S-4C |
+| SRX | SRX300, SRX345, SRX1500, SRX4600 |
+
+## License
+
+[Apache License 2.0](LICENSE)
+
+Copyright 2022-2025 AIKAWA Shigechika
