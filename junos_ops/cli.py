@@ -38,6 +38,7 @@ from junos_ops import upgrade
 from junos_ops import rsi
 
 # upgrade モジュールの関数への参照（後方互換）
+delete_snapshots = upgrade.delete_snapshots
 copy = upgrade.copy
 rollback = upgrade.rollback
 clear_reboot = upgrade.clear_reboot
