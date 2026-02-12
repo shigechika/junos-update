@@ -85,6 +85,15 @@ INI形式の設定ファイルで、接続情報とモデル別パッケージ�
 1. カレントディレクトリの `./config.ini`
 2. `~/.config/junos-ops/config.ini`（XDG_CONFIG_HOME）
 
+### ログ設定（logging.ini）
+
+`logging.ini` を配置すると、ログ出力をカスタマイズできます（例: paramiko/ncclient の冗長なログを抑制）。`config.ini` と同じ順序で探索されます：
+
+1. カレントディレクトリの `./logging.ini`
+2. `~/.config/junos-ops/logging.ini`（XDG_CONFIG_HOME）
+
+どちらも見つからない場合は、デフォルトのログ設定（INFO レベル、stdout 出力）が使用されます。
+
 ### DEFAULTセクション
 
 全ホスト共通の接続設定とモデル→パッケージマッピングを記述します。

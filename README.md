@@ -85,6 +85,15 @@ The configuration file is searched in the following order (`-c` / `--config` can
 1. `./config.ini` in the current directory
 2. `~/.config/junos-ops/config.ini` (XDG_CONFIG_HOME)
 
+### Logging Configuration (logging.ini)
+
+An optional `logging.ini` file can be used to customize log output (e.g., suppress verbose paramiko/ncclient messages). The file is searched in the same order as `config.ini`:
+
+1. `./logging.ini` in the current directory
+2. `~/.config/junos-ops/logging.ini` (XDG_CONFIG_HOME)
+
+If neither is found, the default logging configuration (INFO level to stdout) is used.
+
 ### DEFAULT Section
 
 Defines global connection settings and model-to-package mappings shared by all hosts.
