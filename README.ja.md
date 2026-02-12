@@ -33,6 +33,12 @@ Juniperデバイスのモデルを自動検出し、JUNOSパッケージを自�
 pip install git+https://github.com/shigechika/junos-ops.git
 ```
 
+最新版に更新する場合:
+
+```bash
+pip install git+https://github.com/shigechika/junos-ops.git --upgrade
+```
+
 ### 開発用インストール
 
 ```bash
