@@ -22,8 +22,19 @@ import logging
 import logging.config
 import os
 
-if os.path.isfile("logging.ini"):
-    logging.config.fileConfig("logging.ini")
+def _find_logging_ini():
+    """logging.ini を探索順に返す"""
+    if os.path.isfile("logging.ini"):
+        return "logging.ini"
+    xdg = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
+    xdg_path = os.path.join(xdg, "junos-ops", "logging.ini")
+    if os.path.isfile(xdg_path):
+        return xdg_path
+    return None
+
+_logging_ini = _find_logging_ini()
+if _logging_ini:
+    logging.config.fileConfig(_logging_ini)
 else:
     logging.basicConfig(
         level=logging.INFO,
