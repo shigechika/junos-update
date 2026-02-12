@@ -68,7 +68,7 @@ def connect(hostname):
         port=int(config.get(hostname, "port")),
         user=config.get(hostname, "id"),
         passwd=config.get(hostname, "pw"),
-        ssh_private_key_file=config.get(hostname, "sshkey"),
+        ssh_private_key_file=os.path.expanduser(config.get(hostname, "sshkey")),
         huge_tree=config.getboolean(hostname, "huge_tree", fallback=False),
     )
     err = None
