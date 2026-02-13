@@ -1,6 +1,6 @@
 # junos-ops
 
-[English](README.md)
+[English](https://github.com/shigechika/junos-ops/blob/main/README.md)
 
 Juniperデバイスのモデルを自動検出し、JUNOSパッケージを自動更新するツールです。
 

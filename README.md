@@ -1,6 +1,6 @@
 # junos-ops
 
-[日本語版 / Japanese](README.ja.md)
+[日本語版 / Japanese](https://github.com/shigechika/junos-ops/blob/main/README.ja.md)
 
 A tool for automatic detection of Juniper device models and automated JUNOS package updates.
 
