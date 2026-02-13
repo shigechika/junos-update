@@ -30,13 +30,13 @@ A tool for automatic detection of Juniper device models and automated JUNOS pack
 ## Installation
 
 ```bash
-pip install git+https://github.com/shigechika/junos-ops.git
+pip install junos-ops
 ```
 
 To upgrade to the latest version:
 
 ```bash
-pip install git+https://github.com/shigechika/junos-ops.git --upgrade
+pip install junos-ops --upgrade
 ```
 
 ### Development Setup
