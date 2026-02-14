@@ -1,4 +1,4 @@
-"""RSI/SCF 収集機能: show configuration と request support information の並列収集"""
+"""RSI/SCF collection: show configuration and request support information."""
 
 from lxml import etree
 from logging import getLogger
@@ -9,9 +9,9 @@ logger = getLogger(__name__)
 
 
 def get_support_information(dev):
-    """機種別タイムアウト設定で request support information を実行する
+    """Run request support information with model-specific timeout.
 
-    :returns: RPC レスポンス、失敗時は None
+    :returns: RPC response, or None on failure.
     """
     try:
         if dev.facts["personality"] == "SRX_BRANCH":
@@ -45,10 +45,7 @@ def get_support_information(dev):
 
 
 def cmd_rsi(hostname) -> int:
-    """1ホストの SCF + RSI 収集→ファイル出力
-
-    :returns: 0=成功, 非0=エラー
-    """
+    """Collect SCF and RSI for a single host and write to files."""
     logger.debug(f"cmd_rsi: {hostname} start")
     print(f"# {hostname}")
 

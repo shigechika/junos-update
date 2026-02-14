@@ -13,6 +13,8 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
+"""CLI entry point and subcommand routing for junos-ops."""
+
 from jnpr.junos.exception import ConnectClosedError
 from pprint import pprint
 import argparse
@@ -23,7 +25,7 @@ import logging.config
 import os
 
 def _find_logging_ini():
-    """logging.ini を探索順に返す"""
+    """Search for logging.ini in standard locations."""
     if os.path.isfile("logging.ini"):
         return "logging.ini"
     xdg = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
@@ -92,7 +94,7 @@ def __getattr__(name):
 
 
 def cmd_facts(hostname) -> int:
-    """デバイス情報を表示する"""
+    """Display device facts."""
     err, dev = common.connect(hostname)
     if err or dev is None:
         return 1
@@ -111,7 +113,7 @@ def cmd_facts(hostname) -> int:
 
 
 def cmd_upgrade(hostname) -> int:
-    """コピー＋インストール"""
+    """Copy and install package."""
     err, dev = common.connect(hostname)
     if err or dev is None:
         return 1
@@ -131,7 +133,7 @@ def cmd_upgrade(hostname) -> int:
 
 
 def cmd_copy(hostname) -> int:
-    """コピーのみ"""
+    """Copy package to remote device."""
     err, dev = common.connect(hostname)
     if err or dev is None:
         return 1
@@ -151,7 +153,7 @@ def cmd_copy(hostname) -> int:
 
 
 def cmd_install(hostname) -> int:
-    """インストールのみ"""
+    """Install previously copied package."""
     err, dev = common.connect(hostname)
     if err or dev is None:
         return 1
@@ -171,7 +173,7 @@ def cmd_install(hostname) -> int:
 
 
 def cmd_rollback(hostname) -> int:
-    """ロールバック"""
+    """Rollback to previous version."""
     err, dev = common.connect(hostname)
     if err or dev is None:
         return 1
@@ -198,7 +200,7 @@ def cmd_rollback(hostname) -> int:
 
 
 def cmd_version(hostname) -> int:
-    """バージョン表示"""
+    """Show device version information."""
     err, dev = common.connect(hostname)
     if err or dev is None:
         return 1
@@ -218,7 +220,7 @@ def cmd_version(hostname) -> int:
 
 
 def cmd_reboot(hostname) -> int:
-    """リブート"""
+    """Schedule device reboot."""
     err, dev = common.connect(hostname)
     if err or dev is None:
         return 1
@@ -237,7 +239,7 @@ def cmd_reboot(hostname) -> int:
 
 
 def cmd_config(hostname) -> int:
-    """set コマンドファイルを適用"""
+    """Push set command file to device."""
     err, dev = common.connect(hostname)
     if err or dev is None:
         return 1
@@ -257,7 +259,7 @@ def cmd_config(hostname) -> int:
 
 
 def cmd_ls(hostname) -> int:
-    """リモートファイル一覧"""
+    """List remote files."""
     err, dev = common.connect(hostname)
     if err or dev is None:
         return 1
@@ -279,7 +281,7 @@ def cmd_ls(hostname) -> int:
 
 
 def process_host(hostname: str) -> int:
-    """単一ホストの処理（後方互換）。戻り値: 0=成功, 非0=エラー"""
+    """Process a single host (legacy compatibility)."""
     import datetime
     logger.debug(f"{hostname=}")
     logger.debug(f"{datetime.datetime.now()=}")
@@ -346,6 +348,7 @@ def process_host(hostname: str) -> int:
 
 
 def main():
+    """CLI entry point."""
     # 共通オプション用の親パーサー
     parent = argparse.ArgumentParser(add_help=False)
     parent.add_argument(

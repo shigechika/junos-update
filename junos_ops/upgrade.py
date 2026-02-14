@@ -1,4 +1,4 @@
-"""upgrade 系機能: パッケージ転送・インストール・ロールバック・リブート・バージョン管理"""
+"""Package operations: copy, install, rollback, reboot, and version management."""
 
 from looseversion import LooseVersion
 from jnpr.junos.exception import (
@@ -22,9 +22,9 @@ logger = getLogger(__name__)
 
 
 def delete_snapshots(dev) -> bool:
-    """EX/QFXシリーズのスナップショットを全削除する
+    """Delete all snapshots on EX/QFX series for disk space.
 
-    :return: True=エラー, False=正常（SWITCH以外は何もせず False）
+    :return: True on error, False on success (no-op for non-SWITCH).
     """
     if dev.facts.get("personality") != "SWITCH":
         return False
@@ -51,6 +51,7 @@ def delete_snapshots(dev) -> bool:
 
 
 def copy(hostname, dev):
+    """Copy package to remote device via SCP with checksum verification."""
     if common.args.debug:
         print("copy: start")
     if common.args.force:
@@ -144,6 +145,7 @@ def copy(hostname, dev):
 
 
 def rollback(hostname, dev):
+    """Rollback to previous package version."""
     if common.args.dry_run:
         print("dry-run: request system software rollback")
     else:
@@ -180,7 +182,7 @@ def rollback(hostname, dev):
 
 
 def clear_reboot(dev) -> bool:
-    # clear system reboot
+    """Clear scheduled reboot."""
     if common.args.dry_run:
         print("\tdry-run: clear system reboot")
     else:
@@ -211,6 +213,7 @@ def clear_reboot(dev) -> bool:
 
 
 def install(hostname, dev):
+    """Install package with pre-flight checks."""
     if common.args.debug:
         print("install: start")
     if common.args.force:
@@ -328,6 +331,7 @@ def install(hostname, dev):
 
 
 def get_model_file(hostname, model):
+    """Look up package filename for a device model."""
     try:
         return common.config.get(hostname, model.lower() + ".file")
     except Exception as e:
@@ -336,6 +340,7 @@ def get_model_file(hostname, model):
 
 
 def get_model_hash(hostname, model):
+    """Look up expected checksum for a device model."""
     try:
         return common.config.get(hostname, model.lower() + ".hash")
     except Exception as e:
@@ -344,6 +349,7 @@ def get_model_hash(hostname, model):
 
 
 def get_hashcache(hostname, file):
+    """Get cached checksum value (thread-safe)."""
     with common.config_lock:
         if common.config.has_section(hostname) is False:
             return None
@@ -355,6 +361,7 @@ def get_hashcache(hostname, file):
 
 
 def set_hashcache(hostname, file, value):
+    """Set cached checksum value (thread-safe)."""
     with common.config_lock:
         if common.config.has_section(hostname) is False:
             # "localhost"
@@ -363,7 +370,8 @@ def set_hashcache(hostname, file, value):
 
 
 def check_local_package(hostname, dev):
-    """check local package
+    """Check local package checksum.
+
     :returns:
        * ``True`` file found, checksum correct.
        * ``False`` file found, checksum incorrect.
@@ -401,7 +409,8 @@ def check_local_package(hostname, dev):
 
 
 def check_remote_package(hostname, dev):
-    """check remote package
+    """Check remote package checksum.
+
     :returns:
        * ``True`` file found, checksum correct.
        * ``False`` file found, checksum incorrect.
@@ -442,7 +451,7 @@ def check_remote_package(hostname, dev):
 
 
 def list_remote_path(hostname, dev):
-    # list remote path
+    """List files on remote device path."""
     if common.args.debug:
         print("list_remote_path: start")
     # file list /var/tmp/
@@ -478,6 +487,7 @@ def list_remote_path(hostname, dev):
 
 
 def dry_run(hostname, dev):
+    """Perform dry-run checks for local and remote packages."""
     if common.args.debug:
         print("dry-run: start")
         print("hostname: ", dev.facts["hostname"])
@@ -499,10 +509,11 @@ def dry_run(hostname, dev):
 
 
 def check_running_package(hostname, dev):
-    """compare running version with planning version
+    """Compare running version with planning version.
+
     :returns:
-       * ``True`` same(correct)
-       * ``False`` diffrent(incorrect)
+       * ``True`` same (already running target version).
+       * ``False`` different (upgrade needed).
     """
     if common.args.debug:
         print("check_running_package: start")
@@ -548,10 +559,11 @@ def compare_version(left: str, right: str) -> int | None:
 
 
 def get_pending_version(hostname, dev) -> str:
-    """
+    """Get pending (staged) version string.
+
     :returns:
-       * ``None`` not exist
-       * ``str`` pending version string
+       * ``None`` no pending version.
+       * ``str`` pending version string.
     """
     pending = None
     try:
@@ -667,6 +679,7 @@ def get_pending_version(hostname, dev) -> str:
 
 
 def get_planning_version(hostname, dev) -> str:
+    """Extract planning version from package filename."""
     planning = None
     f = get_model_file(hostname, dev.facts["model"])
     m = re.search(r".*-(\d{2}\.\d.*\d).*\.tgz", f)
@@ -709,9 +722,9 @@ def get_reboot_information(hostname, dev):
 
 
 def get_commit_information(dev):
-    """最新コミット情報を取得する
+    """Get the latest commit information.
 
-    :return: (epoch_seconds, datetime_str, user, client) のタプル、または None
+    :return: (epoch_seconds, datetime_str, user, client) tuple, or None.
     """
     try:
         xml = dev.rpc.get_commit_information()
@@ -739,9 +752,9 @@ def get_commit_information(dev):
 
 
 def get_rescue_config_time(dev):
-    """rescue config ファイルの更新時刻（epoch秒）を取得する
+    """Get rescue config file modification time.
 
-    :return: epoch_seconds (int) または None（ファイルなし・エラー時）
+    :return: epoch_seconds (int), or None if file missing or error.
     """
     try:
         xml = dev.rpc.file_list(path="/config/rescue.conf.gz", detail=True)
@@ -769,12 +782,7 @@ def get_rescue_config_time(dev):
 
 
 def show_version(hostname, dev):
-    """show version
-    show running version
-    show pending version
-    check for updated
-    suggest action to copy, install, reboot or beer.
-    """
+    """Show version information and suggest next action."""
 
     logger.debug("start")
 
@@ -830,9 +838,9 @@ def show_version(hostname, dev):
 
 
 def check_and_reinstall(hostname, dev) -> bool:
-    """pending version がある場合、config が install 後に変更されていたら再インストールする
+    """Re-install firmware if config was modified after install.
 
-    :return: True=エラー, False=正常（再インストール不要含む）
+    :return: True on error, False on success (including no re-install needed).
     """
     pending = get_pending_version(hostname, dev)
     if pending is None:
@@ -907,6 +915,7 @@ def check_and_reinstall(hostname, dev) -> bool:
 
 
 def reboot(hostname: str, dev, reboot_dt: datetime.datetime):
+    """Schedule device reboot at specified time."""
     logger.debug(f"{reboot_dt=}")
     try:
         rpc = dev.rpc.get_reboot_information({"format": "text"})
@@ -958,6 +967,7 @@ def reboot(hostname: str, dev, reboot_dt: datetime.datetime):
 
 
 def yymmddhhmm_type(dt_str: str) -> datetime.datetime:
+    """Validate and parse YYMMDDHHMM datetime string for argparse."""
     try:
         return datetime.datetime.strptime(dt_str, "%y%m%d%H%M")
     except ValueError as e:
@@ -967,15 +977,12 @@ def yymmddhhmm_type(dt_str: str) -> datetime.datetime:
 
 
 def load_config(hostname, dev, configfile) -> bool:
-    """set コマンドファイルをロードしてコミットする
+    """Load set command file and commit to device.
 
-    commit フロー: lock → load → diff → commit_check → commit confirmed → confirm → unlock
-    エラー時は rollback + unlock でクリーンアップ。
+    Commit flow: lock -> load -> diff -> commit_check -> commit confirmed -> confirm -> unlock.
+    On error, rollback + unlock for cleanup.
 
-    :param hostname: ホスト名（表示用）
-    :param dev: PyEZ Device インスタンス
-    :param configfile: set コマンドファイルのパス
-    :return: True=エラー, False=正常
+    :return: True on error, False on success.
     """
     cu = Config(dev)
 

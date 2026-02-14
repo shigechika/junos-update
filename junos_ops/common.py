@@ -1,4 +1,4 @@
-"""共通機能: 設定読込、接続管理、ターゲット決定、並列実行"""
+"""Common utilities: config loading, NETCONF connection, target resolution, parallel execution."""
 
 from concurrent import futures
 from jnpr.junos import Device
@@ -26,7 +26,7 @@ DEFAULT_CONFIG = "config.ini"
 
 
 def get_default_config():
-    """設定ファイルのデフォルトパスを探索順に返す"""
+    """Search for config file in standard locations."""
     # カレントディレクトリ
     if os.path.isfile(DEFAULT_CONFIG):
         return DEFAULT_CONFIG
@@ -39,6 +39,7 @@ def get_default_config():
 
 
 def read_config():
+    """Read and parse the INI config file."""
     global config
     config = configparser.ConfigParser(allow_no_value=True)
     config.read(args.config)
@@ -61,6 +62,7 @@ def read_config():
 
 
 def connect(hostname):
+    """Open NETCONF connection to a device."""
     if args.debug:
         print("connect: start")
     dev = Device(
@@ -107,7 +109,7 @@ def connect(hostname):
 
 
 def get_targets():
-    """specialhosts が指定されていればそのリスト、なければ全セクション"""
+    """Return target host list from CLI args or config sections."""
     targets = []
     if len(args.specialhosts) == 0:
         for i in config.sections():
@@ -131,9 +133,9 @@ def get_targets():
 
 
 def run_parallel(func, targets, max_workers=1):
-    """ターゲットリストに対して関数を並列実行する
+    """Run a function against targets using ThreadPoolExecutor.
 
-    max_workers=1 の場合はシリアル実行（既存動作と同じ）
+    When max_workers=1, runs serially for backward compatibility.
     """
     if max_workers <= 1:
         results = {}
