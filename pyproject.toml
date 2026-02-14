@@ -32,6 +32,7 @@ dependencies = [
 Homepage = "https://github.com/shigechika/junos-ops"
 Repository = "https://github.com/shigechika/junos-ops"
 Issues = "https://github.com/shigechika/junos-ops/issues"
+Changelog = "https://github.com/shigechika/junos-ops/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 test = ["pytest", "pytest-cov"]

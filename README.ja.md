@@ -1,5 +1,9 @@
 # junos-ops
 
+[![PyPI version](https://img.shields.io/pypi/v/junos-ops)](https://pypi.org/project/junos-ops/)
+[![CI](https://github.com/shigechika/junos-ops/actions/workflows/ci.yml/badge.svg)](https://github.com/shigechika/junos-ops/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/pypi/pyversions/junos-ops)](https://pypi.org/project/junos-ops/)
+
 [English](https://github.com/shigechika/junos-ops/blob/main/README.md)
 
 Juniperデバイスのモデルを自動検出し、JUNOSパッケージを自動更新するツールです。
