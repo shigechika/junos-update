@@ -58,6 +58,15 @@ pip install -e ".[test]"
 - [junos-eznc (PyEZ)](https://www.juniper.net/documentation/product/us/en/junos-pyez) — Juniper NETCONF automation library
 - [looseversion](https://pypi.org/project/looseversion/) — Version comparison
 
+### Tab Completion (optional)
+
+```bash
+pip install junos-ops[completion]
+eval "$(register-python-argcomplete junos-ops)"
+```
+
+Add the `eval` line to your shell profile (`~/.bashrc` or `~/.zshrc`) to enable it permanently.
+
 ### Installing pip3 (if not available)
 
 <details>

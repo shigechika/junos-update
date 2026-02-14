@@ -58,6 +58,15 @@ pip install -e ".[test]"
 - [junos-eznc (PyEZ)](https://www.juniper.net/documentation/product/us/en/junos-pyez) — Juniper NETCONF自動化ライブラリ
 - [looseversion](https://pypi.org/project/looseversion/) — バージョン比較
 
+### タブ補完（任意）
+
+```bash
+pip install junos-ops[completion]
+eval "$(register-python-argcomplete junos-ops)"
+```
+
+`eval` の行を `~/.bashrc` や `~/.zshrc` に追記すると常時有効になります。
+
 ### pip3のインストール（未導入の場合）
 
 <details>
