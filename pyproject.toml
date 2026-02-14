@@ -36,6 +36,7 @@ Changelog = "https://github.com/shigechika/junos-ops/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 test = ["pytest", "pytest-cov"]
+completion = ["argcomplete"]
 
 [project.scripts]
 junos-ops = "junos_ops.cli:main"

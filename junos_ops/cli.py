@@ -453,6 +453,13 @@ def main():
     # サブコマンドなし → device facts 表示
     # argparse はサブコマンドなしで positional args を受け取れないため、
     # 引数がサブコマンドに一致しない場合は facts として扱う
+    # Tab completion (requires: pip install junos-ops[completion])
+    try:
+        import argcomplete
+        argcomplete.autocomplete(parser)
+    except ImportError:
+        pass
+
     args = parser.parse_args()
 
     # サブコマンドなしの場合の処理
