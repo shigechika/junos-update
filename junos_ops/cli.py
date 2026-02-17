@@ -19,7 +19,6 @@ from jnpr.junos.exception import ConnectClosedError
 from pprint import pprint
 import argparse
 import sys
-from logging import getLogger
 import logging
 import logging.config
 import os
@@ -45,10 +44,10 @@ else:
     )
 logger = logging.getLogger(__name__)
 
-from junos_ops import __version__ as version
-from junos_ops import common
-from junos_ops import upgrade
-from junos_ops import rsi
+from junos_ops import __version__ as version  # noqa: E402
+from junos_ops import common  # noqa: E402
+from junos_ops import upgrade  # noqa: E402
+from junos_ops import rsi  # noqa: E402
 
 # upgrade モジュールの関数への参照（後方互換）
 delete_snapshots = upgrade.delete_snapshots
@@ -228,6 +227,26 @@ def cmd_reboot(hostname) -> int:
         print(f"# {hostname}")
         ret = upgrade.reboot(hostname, dev, common.args.rebootat)
         return ret
+    except Exception as e:
+        logger.error(f"{hostname}: {e}")
+        return 1
+    finally:
+        try:
+            dev.close()
+        except (ConnectClosedError, Exception):
+            pass
+
+
+def cmd_show(hostname) -> int:
+    """Run CLI command on device and print output."""
+    err, dev = common.connect(hostname)
+    if err or dev is None:
+        return 1
+    try:
+        output = dev.cli(common.args.show_command)
+        # 1回の print で出力し、並列実行時のインターリーブを軽減
+        print(f"# {hostname}\n{output.strip()}\n")
+        return 0
     except Exception as e:
         logger.error(f"{hostname}: {e}")
         return 1
@@ -426,6 +445,16 @@ def main():
     )
     p_ls.add_argument("specialhosts", metavar="hostname", nargs="*")
 
+    # show
+    p_show = subparsers.add_parser(
+        "show", parents=[parent], help="run CLI command on devices",
+    )
+    p_show.add_argument(
+        "show_command", metavar="command",
+        help='CLI command to run (e.g. "show bgp summary")',
+    )
+    p_show.add_argument("specialhosts", metavar="hostname", nargs="*")
+
     # config
     p_config = subparsers.add_parser(
         "config", parents=[parent], help="push set command file to devices",
@@ -499,6 +528,8 @@ def main():
         args.configfile = None
     if not hasattr(args, "confirm_timeout"):
         args.confirm_timeout = 1
+    if not hasattr(args, "show_command"):
+        args.show_command = None
     # process_host 互換用
     args.copy = False
     args.install = False
@@ -534,6 +565,7 @@ def main():
         "version": cmd_version,
         "reboot": cmd_reboot,
         "ls": cmd_ls,
+        "show": cmd_show,
         "config": cmd_config,
         "rsi": rsi.cmd_rsi,
         None: cmd_facts,
