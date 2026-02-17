@@ -10,10 +10,11 @@ Subcommands::
     junos-ops version [hostname ...]   # show versions
     junos-ops reboot --at YYMMDDHHMM   # schedule reboot
     junos-ops rsi [hostname ...]       # collect RSI/SCF
+    junos-ops show "show bgp summary"  # run CLI command
     junos-ops config -f FILE           # push set commands
 
 See Also:
     https://github.com/shigechika/junos-ops
 """
 
-__version__ = "0.5.3"
+__version__ = "0.6.0"

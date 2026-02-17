@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-02-17
+
 ### Added
+- `show` subcommand: run arbitrary CLI commands across devices in parallel
+  (`junos-ops show "show bgp summary" -c config.ini --workers 10`)
 - argcomplete tab completion (optional dependency)
 
 ## [0.5.3] - 2025-05-24
@@ -56,6 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Package install, rollback, and reboot scheduling
 - INI-based configuration
 
+[0.6.0]: https://github.com/shigechika/junos-ops/compare/v0.5.3...v0.6.0
 [0.5.3]: https://github.com/shigechika/junos-ops/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/shigechika/junos-ops/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/shigechika/junos-ops/compare/v0.5...v0.5.1

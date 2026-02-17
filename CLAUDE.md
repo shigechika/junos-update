@@ -35,6 +35,7 @@ tests/
 ├── test_parallel.py    # 並列実行・ターゲット決定のテスト
 ├── test_reboot.py      # reboot・config変更検出・snapshot削除のテスト
 ├── test_config_push.py # config サブコマンド（load_config）のテスト
+├── test_show.py        # show サブコマンドのテスト
 └── test_rsi.py     # RSI/SCF収集のテスト
 pyproject.toml      # パッケージメタデータ、エントリポイント
 config.ini          # 設定ファイル（設定例）
@@ -78,7 +79,7 @@ LICENSE
 
 ### cli.py — サブコマンドルーティング
 - `main()` — argparse サブコマンド定義、ディスパッチ
-- `cmd_upgrade()`, `cmd_copy()`, `cmd_install()`, `cmd_rollback()`, `cmd_version()`, `cmd_reboot()`, `cmd_ls()`, `cmd_config()`, `cmd_facts()` — サブコマンド用エントリ関数
+- `cmd_upgrade()`, `cmd_copy()`, `cmd_install()`, `cmd_rollback()`, `cmd_version()`, `cmd_reboot()`, `cmd_ls()`, `cmd_show()`, `cmd_config()`, `cmd_facts()` — サブコマンド用エントリ関数
 - `process_host()` — 旧CLI互換の統合処理関数
 
 ## CLI設計
@@ -91,6 +92,7 @@ junos-ops rollback [hostname ...]          # ロールバック
 junos-ops version [hostname ...]           # バージョン表示
 junos-ops reboot --at YYMMDDHHMM [hostname ...]  # リブート
 junos-ops ls [-l] [hostname ...]           # リモートファイル一覧
+junos-ops show COMMAND [hostname ...]           # 任意の CLI コマンドを実行
 junos-ops config -f FILE [--confirm N] [hostname ...]  # set コマンドファイル適用
 junos-ops rsi [hostname ...]               # RSI/SCF収集
 junos-ops [hostname ...]                   # サブコマンド省略 → device facts 表示
@@ -149,7 +151,7 @@ host = 192.0.2.1           # IPアドレスでオーバーライド
 pytest tests/ -v --tb=short
 ```
 
-100テスト（バージョン比較、設定読込、接続モック、process_host統合テスト、reboot・config変更検出・snapshot削除、config push、RSI収集モック・DISPLAY_STYLE、並列実行、スレッド安全性）。
+106テスト（バージョン比較、設定読込、接続モック、process_host統合テスト、reboot・config変更検出・snapshot削除、config push、show コマンド、RSI収集モック・DISPLAY_STYLE、並列実行、スレッド安全性）。
 
 ### ビルド検証
 
