@@ -161,6 +161,18 @@ pip install build && python -m build
 
 CI で sdist / wheel のビルドを検証。pyproject.toml の記述ミス（PEP 639 ライセンス競合等）を早期検出する。
 
+## リリース手順
+
+1. `junos_ops/__init__.py` の `__version__` を更新
+2. `CHANGELOG.md` にバージョンエントリを追加
+3. コミット & push
+4. タグを作成して push → GitHub Actions が TestPyPI → PyPI → GitHub Release を自動実行
+
+```bash
+git tag v0.X.Y
+git push origin v0.X.Y
+```
+
 ## 既知の注意事項
 
 - `args`と`config`は`common`モジュールのグローバル変数として管理される
