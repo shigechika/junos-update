@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Mermaid workflow diagrams in README (CLI architecture, upgrade workflow, upgrade internal flow, reboot safety flow, config push workflow)
+- Explanatory text for all workflow diagrams describing the purpose of each safety mechanism
+
 ## [0.6.0] - 2026-02-17
 
 ### Added
