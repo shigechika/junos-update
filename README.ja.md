@@ -185,7 +185,34 @@ junos-ops <subcommand> [options] [hostname ...]
 
 ## ワークフロー
 
+### CLI 処理フロー
+
+```mermaid
+flowchart TD
+    A[junos-ops CLI] --> B[config.ini 読み込み]
+    B --> C[対象ホスト決定]
+    C --> D{サブコマンド}
+    D --> E[upgrade / copy / install]
+    D --> F[version / rollback / reboot]
+    D --> G[config / show / ls]
+    D --> H[rsi]
+    D --> I["（なし）→ facts"]
+    E & F & G & H & I --> J[ThreadPoolExecutor\n--workers N]
+    J --> K[NETCONF / SCP\nホストごとに実行]
+    K --> L[結果出力]
+```
+
+### JUNOS アップグレードワークフロー
+
 JUNOSアップデートの典型的な作業フローです。
+
+```mermaid
+flowchart LR
+    A["1. 事前確認\njunos-ops upgrade -n"] --> B["2. アップグレード\njunos-ops upgrade"]
+    B --> C["3. バージョン確認\njunos-ops version"]
+    C --> D["4. リブート\njunos-ops reboot --at"]
+    D -.->|"問題発生時"| E["ロールバック\njunos-ops rollback"]
+```
 
 ```
 1. dry-run で事前確認
@@ -203,7 +230,89 @@ JUNOSアップデートの典型的な作業フローです。
 
 問題が発生した場合は `rollback` で前バージョンに戻せます。
 
+### upgrade 内部フロー
+
+`upgrade` サブコマンドは更新前後に複数の安全チェックを行います。
+
+```mermaid
+flowchart TD
+    A[NETCONF 接続] --> B{実行中バージョン\n= 目標?}
+    B -->|yes| C([スキップ — 更新不要])
+    B -->|no| D{pending バージョン\nあり?}
+    D -->|no| E[copy]
+    D -->|yes| F{pending ≥ 目標?}
+    F -->|yes, --force なし| C
+    F -->|no / --force| G[pending をロールバック]
+    G --> E
+
+    subgraph copy ["copy()"]
+        E --> H[ストレージ cleanup]
+        H --> I["スナップショット削除\n(EX/QFX のみ)"]
+        I --> J["safe_copy（SCP 転送）\n+ チェックサム検証"]:::safe
+    end
+
+    J --> K[リブートスケジュール解除]
+    K --> L[rescue config 保存]:::safe
+    L --> M["sw.install()\nvalidate + チェックサム検証"]:::install
+    M --> N([完了 — リブート待ち])
+
+    classDef safe fill:#d4edda,stroke:#28a745,color:#000
+    classDef install fill:#cce5ff,stroke:#007bff,color:#000
+```
+
+### reboot 安全フロー
+
+`reboot` はリブートスケジュール設定前に、ファームウェアインストール後に設定変更がなかったかを自動検出します。変更があった場合は rescue config を再保存し、validation 付きで再インストールを行い、新ファームウェアと現在の設定の互換性を確認します。
+
+```mermaid
+flowchart TD
+    A[NETCONF 接続] --> B{既存リブート\nスケジュールあり?}
+    B -->|no| D
+    B -->|yes| C{--force?}
+    C -->|no| B2([スキップ — 既存スケジュール維持])
+    C -->|yes| CL[既存スケジュール解除] --> D
+
+    D{pending バージョン\nあり?} -->|no| SCH
+    D -->|yes| E[最終コミット時刻を取得]
+    E --> F[rescue config 時刻を取得]
+    F --> G{インストール後に\n設定変更あり?}
+    G -->|no| SCH
+    G -->|yes| H[rescue config 再保存]:::warned
+    H --> I["ファームウェア再インストール\n（validate + チェックサム検証）"]:::install
+    I -->|成功| SCH
+    I -->|失敗| ERR([中止 — リブートしない]):::errstyle
+
+    SCH["リブートスケジュール設定\n--at YYMMDDHHMM"]:::safe
+
+    classDef safe fill:#d4edda,stroke:#28a745,color:#000
+    classDef install fill:#cce5ff,stroke:#007bff,color:#000
+    classDef warned fill:#fff3cd,stroke:#ffc107,color:#000
+    classDef errstyle fill:#f8d7da,stroke:#dc3545,color:#000
+```
+
 ### config 適用ワークフロー
+
+`config` サブコマンドは2段階コミットを採用しています。まず `commit confirmed`（自動ロールバックタイマー付き）を実行し、次に `commit`（確定）を実行します。タイムアウト内に確定コミットが行われない場合、JUNOS が自動的に変更をロールバックします。
+
+```mermaid
+flowchart TD
+    A[config ロック取得] --> B[set コマンド読み込み]
+    B --> C{差分確認}
+    C -->|変更なし| D[アンロック]
+    C -->|変更あり| E{dry-run?}
+    E -->|yes| F[差分表示\nロールバック] --> D
+    E -->|no| G[commit check]
+    G --> H["commit confirmed N\n（自動ロールバックタイマー）"]:::warned
+    H --> I["commit\n変更を確定"]:::safe
+    I --> D
+    G -->|エラー| J[ロールバック + アンロック]:::errstyle
+    H -->|エラー| J
+    I -->|エラー| J
+
+    classDef warned fill:#fff3cd,stroke:#ffc107,color:#000
+    classDef safe fill:#d4edda,stroke:#28a745,color:#000
+    classDef errstyle fill:#f8d7da,stroke:#dc3545,color:#000
+```
 
 ```
 1. dry-run で差分を確認

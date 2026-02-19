@@ -185,7 +185,32 @@ junos-ops <subcommand> [options] [hostname ...]
 
 ## Workflow
 
+### CLI Architecture Overview
+
+```mermaid
+flowchart TD
+    A[junos-ops CLI] --> B[Read config.ini]
+    B --> C[Determine target hosts]
+    C --> D{Subcommand}
+    D --> E[upgrade / copy / install]
+    D --> F[version / rollback / reboot]
+    D --> G[config / show / ls]
+    D --> H[rsi]
+    D --> I["(none) → facts"]
+    E & F & G & H & I --> J[ThreadPoolExecutor\n--workers N]
+    J --> K[NETCONF / SCP\nper host]
+    K --> L[Results]
+```
+
 ### JUNOS Upgrade Workflow
+
+```mermaid
+flowchart LR
+    A["1. dry-run\njunos-ops upgrade -n"] --> B["2. upgrade\njunos-ops upgrade"]
+    B --> C["3. version\njunos-ops version"]
+    C --> D["4. reboot\njunos-ops reboot --at"]
+    D -.->|"if problems"| E["rollback\njunos-ops rollback"]
+```
 
 ```
 1. Pre-flight check with dry-run
@@ -203,7 +228,89 @@ junos-ops <subcommand> [options] [hostname ...]
 
 Use `rollback` to revert to the previous version if problems occur.
 
+### Upgrade Internal Flow
+
+The `upgrade` subcommand runs multiple safety checks before and during the update process.
+
+```mermaid
+flowchart TD
+    A[NETCONF connect] --> B{Running version\n= target?}
+    B -->|yes| C([Skip — already up to date])
+    B -->|no| D{Pending version\nexists?}
+    D -->|no| E[copy]
+    D -->|yes| F{Pending ≥ target?}
+    F -->|yes, no --force| C
+    F -->|no / --force| G[Rollback pending version]
+    G --> E
+
+    subgraph copy ["copy()"]
+        E --> H[Storage cleanup]
+        H --> I["Snapshot delete\n(EX/QFX only)"]
+        I --> J["safe_copy via SCP\n+ checksum verification"]:::safe
+    end
+
+    J --> K[Clear reboot schedule]
+    K --> L[Save rescue config]:::safe
+    L --> M["sw.install()\nvalidate + checksum"]:::install
+    M --> N([Done — reboot when ready])
+
+    classDef safe fill:#d4edda,stroke:#28a745,color:#000
+    classDef install fill:#cce5ff,stroke:#007bff,color:#000
+```
+
+### Reboot Safety Flow
+
+Before scheduling a reboot, `reboot` automatically checks whether the configuration was modified after the firmware install. If changes are detected, it re-saves the rescue config and re-installs with validation to ensure the new firmware is compatible with the current config.
+
+```mermaid
+flowchart TD
+    A[NETCONF connect] --> B{Existing reboot\nschedule?}
+    B -->|no| D
+    B -->|yes| C{--force?}
+    C -->|no| B2([Skip — keep existing schedule])
+    C -->|yes| CL[Clear existing schedule] --> D
+
+    D{Pending version\nexists?} -->|no| SCH
+    D -->|yes| E[Get last commit time]
+    E --> F[Get rescue config time]
+    F --> G{Config modified\nafter install?}
+    G -->|no| SCH
+    G -->|yes| H[Re-save rescue config]:::warned
+    H --> I["Re-install firmware\n(validate + checksum)"]:::install
+    I -->|success| SCH
+    I -->|failure| ERR([Abort — do not reboot]):::errstyle
+
+    SCH[Schedule reboot at\n--at YYMMDDHHMM]:::safe
+
+    classDef safe fill:#d4edda,stroke:#28a745,color:#000
+    classDef install fill:#cce5ff,stroke:#007bff,color:#000
+    classDef warned fill:#fff3cd,stroke:#ffc107,color:#000
+    classDef errstyle fill:#f8d7da,stroke:#dc3545,color:#000
+```
+
 ### Config Push Workflow
+
+The `config` subcommand uses a two-phase commit: `commit confirmed` (auto-rollback timer) followed by `commit` (permanent). If the second commit is not issued within the timeout, JUNOS automatically rolls back the change.
+
+```mermaid
+flowchart TD
+    A[lock config] --> B[load set commands]
+    B --> C{diff}
+    C -->|no changes| D[unlock]
+    C -->|changes found| E{dry-run?}
+    E -->|yes| F[print diff\nrollback] --> D
+    E -->|no| G[commit check]
+    G --> H["commit confirmed N\n(auto-rollback timer)"]:::warned
+    H --> I[commit\nchanges permanent]:::safe
+    I --> D
+    G -->|error| J[rollback + unlock]:::errstyle
+    H -->|error| J
+    I -->|error| J
+
+    classDef warned fill:#fff3cd,stroke:#ffc107,color:#000
+    classDef safe fill:#d4edda,stroke:#28a745,color:#000
+    classDef errstyle fill:#f8d7da,stroke:#dc3545,color:#000
+```
 
 ```
 1. Preview changes with dry-run
