@@ -187,6 +187,8 @@ junos-ops <subcommand> [options] [hostname ...]
 
 ### CLI Architecture Overview
 
+All subcommands share the same execution pipeline: read the config file, determine target hosts, then dispatch each host to a worker thread via `ThreadPoolExecutor`. The `--workers N` option controls parallelism — defaulting to 1 for upgrade operations (safe sequential execution) and 20 for RSI collection (I/O-bound, benefits from concurrency). Each worker establishes its own NETCONF session, so hosts are processed independently with no shared state.
+
 ```mermaid
 flowchart TD
     A[junos-ops CLI] --> B[Read config.ini]
@@ -203,6 +205,8 @@ flowchart TD
 ```
 
 ### JUNOS Upgrade Workflow
+
+A firmware upgrade follows a four-step sequence designed to minimize risk. First, `dry-run` verifies connectivity, package availability, and checksum without making changes. Then `upgrade` copies and installs the package. `version` confirms the pending version matches expectations before scheduling the reboot. The reboot is scheduled separately so you can choose a maintenance window. If anything goes wrong, `rollback` reverts to the previous firmware at any point before reboot.
 
 ```mermaid
 flowchart LR
@@ -230,7 +234,7 @@ Use `rollback` to revert to the previous version if problems occur.
 
 ### Upgrade Internal Flow
 
-The `upgrade` subcommand runs multiple safety checks before and during the update process.
+The `upgrade` subcommand runs multiple safety checks before and during the update process. It first compares the running version against the target — skipping entirely if already up to date. If a different pending version exists, it rolls that back before proceeding. The copy phase frees disk space (storage cleanup + snapshot delete on EX/QFX), then transfers the package via `safe_copy` with checksum verification to detect corruption. Before installing, it clears any existing reboot schedule and saves the rescue config as a recovery baseline. Finally, `sw.install()` validates the package integrity on the device before applying it.
 
 ```mermaid
 flowchart TD
