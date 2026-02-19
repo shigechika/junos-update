@@ -197,8 +197,8 @@ flowchart TD
     D --> G[config / show / ls]
     D --> H[rsi]
     D --> I["（なし）→ facts"]
-    E & F & G & H & I --> J[ThreadPoolExecutor\n--workers N]
-    J --> K[NETCONF / SCP\nホストごとに実行]
+    E & F & G & H & I --> J["ThreadPoolExecutor<br/>--workers N"]
+    J --> K["NETCONF / SCP<br/>ホストごとに実行"]
     K --> L[結果出力]
 ```
 
@@ -208,10 +208,10 @@ JUNOSアップデートの典型的な作業フローです。
 
 ```mermaid
 flowchart LR
-    A["1. 事前確認\njunos-ops upgrade -n"] --> B["2. アップグレード\njunos-ops upgrade"]
-    B --> C["3. バージョン確認\njunos-ops version"]
-    C --> D["4. リブート\njunos-ops reboot --at"]
-    D -.->|"問題発生時"| E["ロールバック\njunos-ops rollback"]
+    A["1. 事前確認<br/>junos-ops upgrade -n"] --> B["2. アップグレード<br/>junos-ops upgrade"]
+    B --> C["3. バージョン確認<br/>junos-ops version"]
+    C --> D["4. リブート<br/>junos-ops reboot --at"]
+    D -.->|"問題発生時"| E["ロールバック<br/>junos-ops rollback"]
 ```
 
 ```
@@ -236,9 +236,9 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A[NETCONF 接続] --> B{実行中バージョン\n= 目標?}
+    A[NETCONF 接続] --> B{"実行中バージョン<br/>= 目標?"}
     B -->|yes| C([スキップ — 更新不要])
-    B -->|no| D{pending バージョン\nあり?}
+    B -->|no| D{"pending バージョン<br/>あり?"}
     D -->|no| E[copy]
     D -->|yes| F{pending ≥ 目標?}
     F -->|yes, --force なし| C
@@ -247,13 +247,13 @@ flowchart TD
 
     subgraph copy ["copy()"]
         E --> H[ストレージ cleanup]
-        H --> I["スナップショット削除\n(EX/QFX のみ)"]
-        I --> J["safe_copy（SCP 転送）\n+ チェックサム検証"]:::safe
+        H --> I["スナップショット削除<br/>(EX/QFX のみ)"]
+        I --> J["safe_copy（SCP 転送）<br/>+ チェックサム検証"]:::safe
     end
 
     J --> K[リブートスケジュール解除]
     K --> L[rescue config 保存]:::safe
-    L --> M["sw.install()\nvalidate + チェックサム検証"]:::install
+    L --> M["sw.install()<br/>validate + チェックサム検証"]:::install
     M --> N([完了 — リブート待ち])
 
     classDef safe fill:#d4edda,stroke:#28a745,color:#000
@@ -266,23 +266,23 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[NETCONF 接続] --> B{既存リブート\nスケジュールあり?}
+    A[NETCONF 接続] --> B{"既存リブート<br/>スケジュールあり?"}
     B -->|no| D
     B -->|yes| C{--force?}
     C -->|no| B2([スキップ — 既存スケジュール維持])
     C -->|yes| CL[既存スケジュール解除] --> D
 
-    D{pending バージョン\nあり?} -->|no| SCH
+    D{"pending バージョン<br/>あり?"} -->|no| SCH
     D -->|yes| E[最終コミット時刻を取得]
     E --> F[rescue config 時刻を取得]
-    F --> G{インストール後に\n設定変更あり?}
+    F --> G{"インストール後に<br/>設定変更あり?"}
     G -->|no| SCH
     G -->|yes| H[rescue config 再保存]:::warned
-    H --> I["ファームウェア再インストール\n（validate + チェックサム検証）"]:::install
+    H --> I["ファームウェア再インストール<br/>（validate + チェックサム検証）"]:::install
     I -->|成功| SCH
     I -->|失敗| ERR([中止 — リブートしない]):::errstyle
 
-    SCH["リブートスケジュール設定\n--at YYMMDDHHMM"]:::safe
+    SCH["リブートスケジュール設定<br/>--at YYMMDDHHMM"]:::safe
 
     classDef safe fill:#d4edda,stroke:#28a745,color:#000
     classDef install fill:#cce5ff,stroke:#007bff,color:#000
@@ -300,10 +300,10 @@ flowchart TD
     B --> C{差分確認}
     C -->|変更なし| D[アンロック]
     C -->|変更あり| E{dry-run?}
-    E -->|yes| F[差分表示\nロールバック] --> D
+    E -->|yes| F["差分表示<br/>ロールバック"] --> D
     E -->|no| G[commit check]
-    G --> H["commit confirmed N\n（自動ロールバックタイマー）"]:::warned
-    H --> I["commit\n変更を確定"]:::safe
+    G --> H["commit confirmed N<br/>（自動ロールバックタイマー）"]:::warned
+    H --> I["commit<br/>変更を確定"]:::safe
     I --> D
     G -->|エラー| J[ロールバック + アンロック]:::errstyle
     H -->|エラー| J

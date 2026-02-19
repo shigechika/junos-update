@@ -197,8 +197,8 @@ flowchart TD
     D --> G[config / show / ls]
     D --> H[rsi]
     D --> I["(none) → facts"]
-    E & F & G & H & I --> J[ThreadPoolExecutor\n--workers N]
-    J --> K[NETCONF / SCP\nper host]
+    E & F & G & H & I --> J["ThreadPoolExecutor<br/>--workers N"]
+    J --> K["NETCONF / SCP<br/>per host"]
     K --> L[Results]
 ```
 
@@ -206,10 +206,10 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    A["1. dry-run\njunos-ops upgrade -n"] --> B["2. upgrade\njunos-ops upgrade"]
-    B --> C["3. version\njunos-ops version"]
-    C --> D["4. reboot\njunos-ops reboot --at"]
-    D -.->|"if problems"| E["rollback\njunos-ops rollback"]
+    A["1. dry-run<br/>junos-ops upgrade -n"] --> B["2. upgrade<br/>junos-ops upgrade"]
+    B --> C["3. version<br/>junos-ops version"]
+    C --> D["4. reboot<br/>junos-ops reboot --at"]
+    D -.->|"if problems"| E["rollback<br/>junos-ops rollback"]
 ```
 
 ```
@@ -234,9 +234,9 @@ The `upgrade` subcommand runs multiple safety checks before and during the updat
 
 ```mermaid
 flowchart TD
-    A[NETCONF connect] --> B{Running version\n= target?}
+    A[NETCONF connect] --> B{"Running version<br/>= target?"}
     B -->|yes| C([Skip — already up to date])
-    B -->|no| D{Pending version\nexists?}
+    B -->|no| D{"Pending version<br/>exists?"}
     D -->|no| E[copy]
     D -->|yes| F{Pending ≥ target?}
     F -->|yes, no --force| C
@@ -245,13 +245,13 @@ flowchart TD
 
     subgraph copy ["copy()"]
         E --> H[Storage cleanup]
-        H --> I["Snapshot delete\n(EX/QFX only)"]
-        I --> J["safe_copy via SCP\n+ checksum verification"]:::safe
+        H --> I["Snapshot delete<br/>(EX/QFX only)"]
+        I --> J["safe_copy via SCP<br/>+ checksum verification"]:::safe
     end
 
     J --> K[Clear reboot schedule]
     K --> L[Save rescue config]:::safe
-    L --> M["sw.install()\nvalidate + checksum"]:::install
+    L --> M["sw.install()<br/>validate + checksum"]:::install
     M --> N([Done — reboot when ready])
 
     classDef safe fill:#d4edda,stroke:#28a745,color:#000
@@ -264,23 +264,23 @@ Before scheduling a reboot, `reboot` automatically checks whether the configurat
 
 ```mermaid
 flowchart TD
-    A[NETCONF connect] --> B{Existing reboot\nschedule?}
+    A[NETCONF connect] --> B{"Existing reboot<br/>schedule?"}
     B -->|no| D
     B -->|yes| C{--force?}
     C -->|no| B2([Skip — keep existing schedule])
     C -->|yes| CL[Clear existing schedule] --> D
 
-    D{Pending version\nexists?} -->|no| SCH
+    D{"Pending version<br/>exists?"} -->|no| SCH
     D -->|yes| E[Get last commit time]
     E --> F[Get rescue config time]
-    F --> G{Config modified\nafter install?}
+    F --> G{"Config modified<br/>after install?"}
     G -->|no| SCH
     G -->|yes| H[Re-save rescue config]:::warned
-    H --> I["Re-install firmware\n(validate + checksum)"]:::install
+    H --> I["Re-install firmware<br/>(validate + checksum)"]:::install
     I -->|success| SCH
     I -->|failure| ERR([Abort — do not reboot]):::errstyle
 
-    SCH[Schedule reboot at\n--at YYMMDDHHMM]:::safe
+    SCH["Schedule reboot at<br/>--at YYMMDDHHMM"]:::safe
 
     classDef safe fill:#d4edda,stroke:#28a745,color:#000
     classDef install fill:#cce5ff,stroke:#007bff,color:#000
@@ -298,10 +298,10 @@ flowchart TD
     B --> C{diff}
     C -->|no changes| D[unlock]
     C -->|changes found| E{dry-run?}
-    E -->|yes| F[print diff\nrollback] --> D
+    E -->|yes| F["print diff<br/>rollback"] --> D
     E -->|no| G[commit check]
-    G --> H["commit confirmed N\n(auto-rollback timer)"]:::warned
-    H --> I[commit\nchanges permanent]:::safe
+    G --> H["commit confirmed N<br/>(auto-rollback timer)"]:::warned
+    H --> I["commit<br/>changes permanent"]:::safe
     I --> D
     G -->|error| J[rollback + unlock]:::errstyle
     H -->|error| J
