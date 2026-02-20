@@ -209,7 +209,7 @@ flowchart TD
 A firmware upgrade follows a four-step sequence designed to minimize risk. First, `dry-run` verifies connectivity, package availability, and checksum without making changes. Then `upgrade` copies and installs the package. `version` confirms the pending version matches expectations before scheduling the reboot. The reboot is scheduled separately so you can choose a maintenance window. If anything goes wrong, `rollback` reverts to the previous firmware at any point before reboot.
 
 ```mermaid
-flowchart LR
+flowchart TD
     A["1. dry-run<br/>junos-ops upgrade -n"] --> B["2. upgrade<br/>junos-ops upgrade"]
     B --> C["3. version<br/>junos-ops version"]
     C --> D["4. reboot<br/>junos-ops reboot --at"]

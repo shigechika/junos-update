@@ -209,7 +209,7 @@ flowchart TD
 ファームウェア更新はリスクを最小化する4ステップで構成されています。まず `dry-run` で接続性・パッケージの存在・チェックサムを変更なしで検証します。次に `upgrade` でコピーとインストールを実行します。`version` でインストール後の pending バージョンが想定通りか確認し、問題がなければリブートをスケジュールします。リブートを別ステップにしているのは、メンテナンスウィンドウを選択できるようにするためです。リブート前であればいつでも `rollback` で元のファームウェアに戻せます。
 
 ```mermaid
-flowchart LR
+flowchart TD
     A["1. 事前確認<br/>junos-ops upgrade -n"] --> B["2. アップグレード<br/>junos-ops upgrade"]
     B --> C["3. バージョン確認<br/>junos-ops version"]
     C --> D["4. リブート<br/>junos-ops reboot --at"]
