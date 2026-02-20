@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-02-20
+
+### Changed
+- Upgrade and RSI workflow diagrams changed from `flowchart LR` to `flowchart TD` for better readability
+
 ## [0.6.1] - 2026-02-19
 
 ### Added
@@ -66,6 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Package install, rollback, and reboot scheduling
 - INI-based configuration
 
+[0.6.2]: https://github.com/shigechika/junos-ops/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/shigechika/junos-ops/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/shigechika/junos-ops/compare/v0.5.3...v0.6.0
 [0.5.3]: https://github.com/shigechika/junos-ops/compare/v0.5.2...v0.5.3
