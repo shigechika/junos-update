@@ -151,7 +151,7 @@ host = 192.0.2.1           # IPアドレスでオーバーライド
 pytest tests/ -v --tb=short
 ```
 
-106テスト（バージョン比較、設定読込、接続モック、process_host統合テスト、reboot・config変更検出・snapshot削除、config push、show コマンド、RSI収集モック・DISPLAY_STYLE、並列実行、スレッド安全性）。
+121テスト（バージョン比較、設定読込、接続モック、process_host統合テスト、reboot・config変更検出・snapshot削除、config push・ヘルスチェック、show コマンド、RSI収集モック・DISPLAY_STYLE、並列実行、スレッド安全性）。
 
 ### ビルド検証
 
