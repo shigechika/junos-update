@@ -68,7 +68,7 @@ LICENSE
 - `get_rescue_config_time()` — rescue config ファイルの更新時刻取得
 - `check_and_reinstall()` — config変更検出＋validation付き自動再インストール
 - `get_hashcache()` / `set_hashcache()` — チェックサムキャッシュ（スレッド安全）
-- `load_config()` — set コマンドファイルのロード＋コミット（lock→load→diff→commit_check→commit confirmed→confirm→unlock）、`--workers` で並列実行対応
+- `load_config()` — set コマンドファイルのロード＋コミット（lock→load→diff→commit_check→commit confirmed→health check→confirm→unlock）、`--workers` で並列実行対応
 - `list_remote_path()` — リモートファイル一覧
 
 ### rsi.py — RSI/SCF収集

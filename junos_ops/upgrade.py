@@ -1008,7 +1008,7 @@ def _run_health_check(hostname, dev, health_cmd) -> bool:
 def load_config(hostname, dev, configfile) -> bool:
     """Load set command file and commit to device.
 
-    Commit flow: lock -> load -> diff -> commit_check -> commit confirmed -> confirm -> unlock.
+    Commit flow: lock -> load -> diff -> commit_check -> commit confirmed -> health check -> confirm -> unlock.
     On error, rollback + unlock for cleanup.
 
     :return: True on error, False on success.
