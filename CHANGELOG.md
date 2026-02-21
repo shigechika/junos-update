@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-02-21
+
 ### Added
 - `config --health-check` / `--no-health-check`: run a health check command (default: `ping count 3 8.8.8.8 rapid`) between `commit confirmed` and the final `commit`. On failure, the final commit is withheld and JUNOS auto-rolls back when the timer expires.
 
@@ -83,6 +85,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Package install, rollback, and reboot scheduling
 - INI-based configuration
 
+[0.8.0]: https://github.com/shigechika/junos-ops/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/shigechika/junos-ops/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/shigechika/junos-ops/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/shigechika/junos-ops/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/shigechika/junos-ops/compare/v0.5.3...v0.6.0
