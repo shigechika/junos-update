@@ -410,6 +410,41 @@ set system login user viewer authentication ssh-ed25519 "ssh-ed25519 AAAA..."
 
 Use `--confirm N` to change the commit confirmed timeout (default: 1 minute).
 
+Set files can include `#` comments and blank lines — they are automatically stripped before sending to the device.
+
+### show (run CLI command)
+
+Run an arbitrary CLI command across multiple devices in parallel.
+
+```
+% junos-ops show "show bgp summary" -c accounts.ini gw1.example.jp gw2.example.jp
+# gw1.example.jp
+Groups: 4 Peers: 6 Down peers: 0
+...
+# gw2.example.jp
+Groups: 3 Peers: 4 Down peers: 0
+...
+```
+
+Use `-f` to run multiple commands from a file within a single NETCONF session per device:
+
+```
+% cat commands.txt
+# security policy check
+show security policies hit-count
+show security flow session summary
+
+% junos-ops show -f commands.txt -c accounts.ini fw1.example.jp
+# fw1.example.jp
+## show security policies hit-count
+...
+
+## show security flow session summary
+...
+```
+
+> **Note:** JUNOS CLI pipe filters (`| match`, `| count`, etc.) are not supported. PyEZ's `dev.cli()` sends commands via NETCONF RPC, which does not process pipe modifiers. Filter output with shell tools (e.g. `grep`) instead.
+
 ### No subcommand (show device facts)
 
 ```

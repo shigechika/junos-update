@@ -410,6 +410,41 @@ set system login user viewer authentication ssh-ed25519 "ssh-ed25519 AAAA..."
 
 `--confirm N` で commit confirmed のタイムアウトを変更できます（デフォルト: 1分）。
 
+set ファイルには `#` コメント行や空行を含めることができます。適用前に自動的に除去されます。
+
+### show（CLI コマンド実行）
+
+任意の CLI コマンドを複数デバイスに対して並列実行します。
+
+```
+% junos-ops show "show bgp summary" -c accounts.ini gw1.example.jp gw2.example.jp
+# gw1.example.jp
+Groups: 4 Peers: 6 Down peers: 0
+...
+# gw2.example.jp
+Groups: 3 Peers: 4 Down peers: 0
+...
+```
+
+`-f` でファイルから複数コマンドを読み込み、デバイスごとに1つの NETCONF セッション内で順次実行します。
+
+```
+% cat commands.txt
+# セキュリティポリシー確認
+show security policies hit-count
+show security flow session summary
+
+% junos-ops show -f commands.txt -c accounts.ini fw1.example.jp
+# fw1.example.jp
+## show security policies hit-count
+...
+
+## show security flow session summary
+...
+```
+
+> **注意:** JUNOS CLI のパイプフィルタ（`| match`、`| count` 等）は使用できません。PyEZ の `dev.cli()` は NETCONF RPC 経由でコマンドを送信するため、パイプ修飾子は処理されません。出力のフィルタにはシェル側のツール（`grep` 等）を使用してください。
+
 ### 引数なし（デバイスファクト表示）
 
 ```
