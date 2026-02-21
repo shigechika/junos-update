@@ -976,6 +976,35 @@ def yymmddhhmm_type(dt_str: str) -> datetime.datetime:
         )
 
 
+def _run_health_check(hostname, dev, health_cmd) -> bool:
+    """Run health check command after commit confirmed.
+
+    :return: True on failure, False on success.
+    """
+    print(f"\thealth check: {health_cmd}")
+    try:
+        output = dev.cli(health_cmd)
+    except Exception as e:
+        logger.error(f"{hostname}: health check command failed: {e}")
+        print(f"\thealth check error: {e}")
+        return True
+
+    # ping コマンドの場合: "N packets received" を解析
+    if health_cmd.strip().startswith("ping"):
+        match = re.search(r"(\d+) packets received", output)
+        if match and int(match.group(1)) > 0:
+            print(f"\thealth check passed "
+                  f"({match.group(1)} packets received)")
+            return False
+        else:
+            print(f"\thealth check: no packets received")
+            return True
+
+    # ping 以外: 例外なく実行できれば成功
+    print(f"\thealth check passed")
+    return False
+
+
 def load_config(hostname, dev, configfile) -> bool:
     """Load set command file and commit to device.
 
@@ -1023,6 +1052,18 @@ def load_config(hostname, dev, configfile) -> bool:
         confirm_timeout = getattr(common.args, "confirm_timeout", 1)
         cu.commit(confirm=confirm_timeout)
         print(f"\tcommit confirmed {confirm_timeout} applied")
+
+        # ヘルスチェック
+        health_cmd = getattr(common.args, "health_check", None)
+        if health_cmd:
+            if _run_health_check(hostname, dev, health_cmd):
+                # 失敗 — 最終 commit を送らず、タイマー満了で自動ロールバック
+                print(f"\thealth check FAILED — config will auto-rollback "
+                      f"in {confirm_timeout} minute(s)")
+                logger.error(f"{hostname}: health check failed, "
+                             f"not confirming commit")
+                cu.unlock()
+                return True
 
         # 確定（タイマー解除）
         cu.commit()

@@ -479,6 +479,17 @@ def main():
         "--confirm", dest="confirm_timeout", type=int, default=1,
         help="commit confirm timeout in minutes (default: 1)",
     )
+    hc_group = p_config.add_mutually_exclusive_group()
+    hc_group.add_argument(
+        "--health-check", dest="health_check",
+        default="ping count 3 8.8.8.8 rapid",
+        help='health check CLI command after commit confirmed (default: "ping count 3 8.8.8.8 rapid")',
+    )
+    hc_group.add_argument(
+        "--no-health-check", dest="health_check",
+        action="store_const", const=None,
+        help="skip health check after commit confirmed",
+    )
     p_config.add_argument("specialhosts", metavar="hostname", nargs="*")
 
     # rsi
@@ -548,6 +559,8 @@ def main():
         args.configfile = None
     if not hasattr(args, "confirm_timeout"):
         args.confirm_timeout = 1
+    if not hasattr(args, "health_check"):
+        args.health_check = None
     if not hasattr(args, "show_command"):
         args.show_command = None
     if not hasattr(args, "showfile"):
