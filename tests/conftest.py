@@ -42,6 +42,8 @@ def mock_args(junos_common):
         rebootat=None,
         configfile=None,
         confirm_timeout=1,
+        show_command=None,
+        showfile=None,
         specialhosts=[],
     )
     return junos_common.args

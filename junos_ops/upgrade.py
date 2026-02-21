@@ -995,8 +995,9 @@ def load_config(hostname, dev, configfile) -> bool:
         return True
 
     try:
-        # set コマンドファイル読み込み
-        cu.load(path=configfile, format="set")
+        # set コマンドファイル読み込み（コメント行・空行を除去）
+        commands = common.load_commands(configfile)
+        cu.load("\n".join(commands), format="set")
 
         # 差分確認
         diff = cu.diff()

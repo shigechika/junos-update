@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-02-21
+
+### Added
+- `show -f` option: run multiple CLI commands from a file in a single NETCONF session
+  (`junos-ops show -f commands.txt -c config.ini`)
+
+### Fixed
+- `config -f`: strip `#` comment lines and blank lines before sending to PyEZ, preventing `ConfigLoadError: unknown command`
+
 ## [0.6.2] - 2026-02-20
 
 ### Changed

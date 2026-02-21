@@ -132,6 +132,18 @@ def get_targets():
     return targets
 
 
+def load_commands(filepath: str) -> list[str]:
+    """Load command lines from a file, stripping blank lines and comments.
+
+    Lines starting with '#' are treated as comments and excluded.
+    """
+    with open(filepath) as f:
+        return [
+            line.strip() for line in f
+            if line.strip() and not line.strip().startswith("#")
+        ]
+
+
 def run_parallel(func, targets, max_workers=1):
     """Run a function against targets using ThreadPoolExecutor.
 

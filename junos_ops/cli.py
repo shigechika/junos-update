@@ -243,9 +243,18 @@ def cmd_show(hostname) -> int:
     if err or dev is None:
         return 1
     try:
-        output = dev.cli(common.args.show_command)
-        # 1回の print で出力し、並列実行時のインターリーブを軽減
-        print(f"# {hostname}\n{output.strip()}\n")
+        if common.args.showfile:
+            # ファイルから複数コマンドを読み込み、1セッション内で順次実行
+            commands = common.load_commands(common.args.showfile)
+            lines = []
+            for cmd in commands:
+                output = dev.cli(cmd)
+                lines.append(f"## {cmd}\n{output.strip()}")
+            print(f"# {hostname}\n" + "\n\n".join(lines) + "\n")
+        else:
+            output = dev.cli(common.args.show_command)
+            # 1回の print で出力し、並列実行時のインターリーブを軽減
+            print(f"# {hostname}\n{output.strip()}\n")
         return 0
     except Exception as e:
         logger.error(f"{hostname}: {e}")
@@ -450,10 +459,13 @@ def main():
         "show", parents=[parent], help="run CLI command on devices",
     )
     p_show.add_argument(
-        "show_command", metavar="command",
-        help='CLI command to run (e.g. "show bgp summary")',
+        "-f", "--file", dest="showfile",
+        help="path to file containing CLI commands (one per line)",
     )
-    p_show.add_argument("specialhosts", metavar="hostname", nargs="*")
+    p_show.add_argument(
+        "show_args", metavar="command_or_hostname", nargs="*",
+        help='CLI command (quoted) followed by hostnames, or hostnames only with -f',
+    )
 
     # config
     p_config = subparsers.add_parser(
@@ -489,7 +501,15 @@ def main():
     except ImportError:
         pass
 
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
+
+    # show サブコマンド: 余剰位置引数を show_args に統合
+    # （argparse は nargs="*" でもオプション後の位置引数を正しく収集できないため）
+    if unknown:
+        if getattr(args, "subcommand", None) == "show":
+            args.show_args = getattr(args, "show_args", []) + unknown
+        else:
+            parser.error(f"unrecognized arguments: {' '.join(unknown)}")
 
     # サブコマンドなしの場合の処理
     if args.subcommand is None:
@@ -530,12 +550,28 @@ def main():
         args.confirm_timeout = 1
     if not hasattr(args, "show_command"):
         args.show_command = None
+    if not hasattr(args, "showfile"):
+        args.showfile = None
     # process_host 互換用
     args.copy = False
     args.install = False
     args.update = False
     args.showversion = False
     args.rollback = False
+
+    # show サブコマンド: show_args を show_command + specialhosts に分離
+    if args.subcommand == "show":
+        show_args = getattr(args, "show_args", [])
+        if args.showfile:
+            # -f 使用時は位置引数をすべてホスト名として扱う
+            args.show_command = None
+            args.specialhosts = show_args
+        elif show_args:
+            # 最初の位置引数がコマンド、残りがホスト名
+            args.show_command = show_args[0]
+            args.specialhosts = show_args[1:]
+        else:
+            parser.error("show: コマンドまたは -f のいずれかを指定してください")
 
     common.args = args
     if common.args.config is None:
