@@ -33,6 +33,14 @@ Juniperデバイスのモデルを自動検出し、JUNOSパッケージを自�
 
 ## インストール
 
+### Homebrew (macOS)
+
+```bash
+brew install shigechika/tap/junos-ops
+```
+
+### pip
+
 ```bash
 pip install junos-ops
 ```

@@ -33,6 +33,14 @@ A tool for automatic detection of Juniper device models and automated JUNOS pack
 
 ## Installation
 
+### Homebrew (macOS)
+
+```bash
+brew install shigechika/tap/junos-ops
+```
+
+### pip
+
 ```bash
 pip install junos-ops
 ```
