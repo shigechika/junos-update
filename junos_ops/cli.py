@@ -395,6 +395,10 @@ def main():
         "--workers", type=int, default=None,
         help="parallel workers (default: 1 for upgrade, 20 for rsi)",
     )
+    parent.add_argument(
+        "--tags", type=str, default=None,
+        help="filter hosts by tags (comma-separated, AND match)",
+    )
 
     parser = argparse.ArgumentParser(
         description="junos-ops: Juniper Networks デバイス管理ツール",
@@ -565,6 +569,8 @@ def main():
         args.show_command = None
     if not hasattr(args, "showfile"):
         args.showfile = None
+    if not hasattr(args, "tags"):
+        args.tags = None
     # process_host 互換用
     args.copy = False
     args.install = False

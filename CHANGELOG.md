@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `--tags` option: filter target hosts by tags defined in config.ini (comma-separated, AND match). Supports union with explicit hostnames and case-insensitive matching.
+
 ## [0.8.0] - 2026-02-21
 
 ### Added

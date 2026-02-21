@@ -52,7 +52,9 @@ LICENSE
 - `get_default_config()` — 設定ファイルパスの探索（XDG対応）
 - `read_config()` — INIファイル読込
 - `connect()` — NETCONF接続（huge_tree対応、個別例外処理）
-- `get_targets()` — ターゲットホストリスト決定
+- `_get_host_tags()` — ホストセクションのタグを set で返す
+- `_filter_by_tags()` — タグの AND フィルタでセクションを絞り込む
+- `get_targets()` — ターゲットホストリスト決定（`--tags` 対応）
 - `run_parallel()` — ThreadPoolExecutorラッパー（max_workers=1でシリアル実行）
 
 ### upgrade.py — パッケージ操作
@@ -99,7 +101,7 @@ junos-ops [hostname ...]                   # サブコマンド省略 → device
 junos-ops --version                        # プログラムバージョン
 ```
 
-共通オプション: `-c`, `-n`, `-d`, `--force`, `--workers N`
+共通オプション: `-c`, `-n`, `-d`, `--force`, `--workers N`, `--tags TAG,...`
 
 ## 開発環境セットアップ
 
@@ -141,6 +143,7 @@ EX2300-24T.hash = e233b31a0b9233bc4c56e89954839a8a
 
 ```ini
 [rt1.example.jp]           # hostキー省略 → rt1.example.jpに接続
+tags = tokyo, core         # --tags でフィルタ可能（AND マッチ）
 [rt2.example.jp]
 host = 192.0.2.1           # IPアドレスでオーバーライド
 ```
@@ -151,7 +154,7 @@ host = 192.0.2.1           # IPアドレスでオーバーライド
 pytest tests/ -v --tb=short
 ```
 
-121テスト（バージョン比較、設定読込、接続モック、process_host統合テスト、reboot・config変更検出・snapshot削除、config push・ヘルスチェック、show コマンド、RSI収集モック・DISPLAY_STYLE、並列実行、スレッド安全性）。
+140テスト（バージョン比較、設定読込、接続モック、process_host統合テスト、reboot・config変更検出・snapshot削除、config push・ヘルスチェック、show コマンド、RSI収集モック・DISPLAY_STYLE、並列実行・タグフィルタリング、スレッド安全性）。
 
 ### ビルド検証
 

@@ -108,10 +108,37 @@ def connect(hostname):
     return err, dev
 
 
+def _get_host_tags(section: str) -> set[str]:
+    """Return the set of tags for a config section."""
+    raw = config.get(section, "tags", fallback="")
+    if not raw.strip():
+        return set()
+    return {t.strip().lower() for t in raw.split(",")}
+
+
+def _filter_by_tags(required_tags: set[str]) -> list[str]:
+    """Return sections whose tags are a superset of required_tags (AND)."""
+    matched = []
+    for section in config.sections():
+        if required_tags <= _get_host_tags(section):
+            matched.append(section)
+    return matched
+
+
 def get_targets():
-    """Return target host list from CLI args or config sections."""
-    targets = []
-    if len(args.specialhosts) == 0:
+    """Return target host list from CLI args, tags, or config sections."""
+    tags = getattr(args, "tags", None)
+    has_hosts = len(args.specialhosts) > 0
+
+    # タグ指定時: パースして AND フィルタ用の set を作成
+    if tags is not None:
+        required_tags = {t.strip().lower() for t in tags.split(",")}
+    else:
+        required_tags = set()
+
+    # パターン1: --tags なし & hosts なし → 全セクション（現行動作）
+    if not required_tags and not has_hosts:
+        targets = []
         for i in config.sections():
             tmp = config.get(i, "host")
             logger.debug(f"{i=} {tmp=}")
@@ -120,7 +147,11 @@ def get_targets():
             else:
                 print(i, "is not found in", args.config)
                 sys.exit(1)
-    else:
+        return targets
+
+    # パターン2: --tags なし & hosts あり → 指定ホストのみ（現行動作）
+    if not required_tags and has_hosts:
+        targets = []
         for i in args.specialhosts:
             if config.has_section(i):
                 tmp = config.get(i, "host")
@@ -128,6 +159,33 @@ def get_targets():
                 print(i, "is not found in", args.config)
                 sys.exit(1)
             logger.debug(f"{i=} {tmp=}")
+            targets.append(i)
+        return targets
+
+    # パターン3: --tags あり & hosts なし → タグで AND フィルタ
+    if required_tags and not has_hosts:
+        targets = _filter_by_tags(required_tags)
+        if not targets:
+            print("no hosts matched tags:", tags)
+            sys.exit(1)
+        return targets
+
+    # パターン4: --tags あり & hosts あり → タグフィルタ結果 ∪ hosts（重複排除）
+    tag_matched = _filter_by_tags(required_tags)
+    seen = set()
+    targets = []
+    # タグマッチ分を先に追加
+    for i in tag_matched:
+        if i not in seen:
+            seen.add(i)
+            targets.append(i)
+    # 明示指定ホストを追加（存在チェック付き）
+    for i in args.specialhosts:
+        if not config.has_section(i):
+            print(i, "is not found in", args.config)
+            sys.exit(1)
+        if i not in seen:
+            seen.add(i)
             targets.append(i)
     return targets
 

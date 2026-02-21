@@ -138,11 +138,14 @@ EX2300-24T.hash = e233b31a0b9233bc4c56e89954839a8a
 
 ```ini
 [rt1.example.jp]             # セクション名がそのまま接続先ホスト名
+tags = tokyo, core           # タグベースのホストフィルタリング（--tags）
 [rt2.example.jp]
 host = 192.0.2.1             # IPアドレスで接続先を指定
+tags = osaka, core
 [sw1.example.jp]
 id = sw1                     # 接続ユーザを変更
 sshkey = sw1_rsa             # SSH鍵を変更
+tags = tokyo, access
 [sw2.example.jp]
 port = 10830                 # ポートを変更
 [sw3.example.jp]
@@ -180,6 +183,7 @@ junos-ops <subcommand> [options] [hostname ...]
 | `-n`, `--dry-run` | テスト実行（接続とメッセージ出力のみ、実行しない） |
 | `-d`, `--debug` | デバッグ出力 |
 | `--force` | 条件を無視して強制実行 |
+| `--tags TAG,...` | タグでホストをフィルタ（カンマ区切り、AND マッチ） |
 | `--workers N` | 並列実行数（デフォルト: upgrade系=1, rsi=20） |
 | `--version` | プログラムバージョン表示 |
 
@@ -187,7 +191,7 @@ junos-ops <subcommand> [options] [hostname ...]
 
 ### CLI 処理フロー
 
-すべてのサブコマンドは共通の実行パイプラインを通ります。設定ファイルを読み込み、対象ホストを決定し、`ThreadPoolExecutor` でホストごとにワーカースレッドへ振り分けます。`--workers N` で並列数を制御でき、upgrade 系はデフォルト 1（安全な逐次実行）、RSI 収集はデフォルト 20（I/O バウンドのため並列化が有効）です。各ワーカーは独立した NETCONF セッションを確立するため、ホスト間で状態を共有しません。
+すべてのサブコマンドは共通の実行パイプラインを通ります。設定ファイルを読み込み、対象ホストを決定し（`--tags` で絞り込み可能）、`ThreadPoolExecutor` でホストごとにワーカースレッドへ振り分けます。`--workers N` で並列数を制御でき、upgrade 系はデフォルト 1（安全な逐次実行）、RSI 収集はデフォルト 20（I/O バウンドのため並列化が有効）です。各ワーカーは独立した NETCONF セッションを確立するため、ホスト間で状態を共有しません。
 
 ```mermaid
 flowchart TD
@@ -343,6 +347,21 @@ flowchart TD
 
 4. ヘルスチェックなしで適用
    junos-ops config -f commands.set --no-health-check hostname
+```
+
+### タグベースのホストフィルタリング
+
+`--tags` で config.ini に定義したタグでホストを絞り込めます。複数タグは AND マッチ（すべてのタグを持つホストのみ）。明示的なホスト名と組み合わせた場合は union（和集合）になります。
+
+```
+# tokyo タグを持つ全ホスト
+junos-ops version --tags tokyo
+
+# tokyo AND core の両方のタグを持つホスト
+junos-ops version --tags tokyo,core
+
+# タグフィルタと明示ホストの union
+junos-ops version --tags core rt3.example.jp
 ```
 
 ## 実行例

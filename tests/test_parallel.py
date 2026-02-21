@@ -1,6 +1,7 @@
 """run_parallel() / get_targets() のテスト"""
 
 import argparse
+import configparser
 
 import pytest
 
@@ -56,3 +57,166 @@ class TestGetTargets:
         junos_common.args.specialhosts = ["unknown-host"]
         with pytest.raises(SystemExit):
             junos_common.get_targets()
+
+
+@pytest.fixture
+def mock_config_with_tags(junos_common):
+    """タグ付きの4ホスト設定"""
+    cfg = configparser.ConfigParser(allow_no_value=True)
+    cfg.read_dict(
+        {
+            "DEFAULT": {
+                "id": "testuser",
+                "pw": "testpass",
+                "sshkey": "id_ed25519",
+                "port": "830",
+                "hashalgo": "md5",
+                "rpath": "/var/tmp",
+            },
+            "rt1.example.jp": {"host": "rt1.example.jp", "tags": "tokyo, core"},
+            "rt2.example.jp": {"host": "rt2.example.jp", "tags": "osaka, core"},
+            "sw1.example.jp": {"host": "sw1.example.jp", "tags": "tokyo, access"},
+            "sw2.example.jp": {"host": "sw2.example.jp"},  # タグなし
+        }
+    )
+    junos_common.config = cfg
+    return cfg
+
+
+class TestGetHostTags:
+    """_get_host_tags() のテスト"""
+
+    def test_tags_parsed(self, junos_common, mock_args, mock_config_with_tags):
+        """タグがカンマ区切りで set に変換される"""
+        tags = junos_common._get_host_tags("rt1.example.jp")
+        assert tags == {"tokyo", "core"}
+
+    def test_no_tags(self, junos_common, mock_args, mock_config_with_tags):
+        """tags キーなしのホストは空 set"""
+        tags = junos_common._get_host_tags("sw2.example.jp")
+        assert tags == set()
+
+    def test_case_insensitive(self, junos_common, mock_args, mock_config_with_tags):
+        """タグは小文字に正規化される"""
+        # 設定に大文字タグを追加してテスト
+        junos_common.config.set("rt1.example.jp", "tags", "Tokyo, CORE")
+        tags = junos_common._get_host_tags("rt1.example.jp")
+        assert tags == {"tokyo", "core"}
+
+    def test_whitespace_trimmed(self, junos_common, mock_args, mock_config_with_tags):
+        """タグ前後の空白がトリムされる"""
+        junos_common.config.set("rt1.example.jp", "tags", "  tokyo  ,  core  ")
+        tags = junos_common._get_host_tags("rt1.example.jp")
+        assert tags == {"tokyo", "core"}
+
+
+class TestFilterByTags:
+    """_filter_by_tags() のテスト"""
+
+    def test_single_tag(self, junos_common, mock_args, mock_config_with_tags):
+        """単一タグで tokyo のホストをフィルタ"""
+        matched = junos_common._filter_by_tags({"tokyo"})
+        assert matched == ["rt1.example.jp", "sw1.example.jp"]
+
+    def test_and_filter(self, junos_common, mock_args, mock_config_with_tags):
+        """AND フィルタ: tokyo AND core"""
+        matched = junos_common._filter_by_tags({"tokyo", "core"})
+        assert matched == ["rt1.example.jp"]
+
+    def test_no_match(self, junos_common, mock_args, mock_config_with_tags):
+        """マッチなしは空リスト"""
+        matched = junos_common._filter_by_tags({"nonexistent"})
+        assert matched == []
+
+
+class TestGetTargetsWithTags:
+    """get_targets() のタグフィルタリングテスト"""
+
+    def test_tags_none_all_sections(self, junos_common, mock_args, mock_config_with_tags):
+        """tags=None, hosts なし → 全セクション"""
+        junos_common.args.specialhosts = []
+        junos_common.args.tags = None
+        targets = junos_common.get_targets()
+        assert targets == [
+            "rt1.example.jp", "rt2.example.jp",
+            "sw1.example.jp", "sw2.example.jp",
+        ]
+
+    def test_tags_none_with_hosts(self, junos_common, mock_args, mock_config_with_tags):
+        """tags=None, hosts あり → 指定ホストのみ"""
+        junos_common.args.specialhosts = ["rt1.example.jp"]
+        junos_common.args.tags = None
+        targets = junos_common.get_targets()
+        assert targets == ["rt1.example.jp"]
+
+    def test_single_tag_filter(self, junos_common, mock_args, mock_config_with_tags):
+        """--tags tokyo → tokyo タグを持つホスト"""
+        junos_common.args.specialhosts = []
+        junos_common.args.tags = "tokyo"
+        targets = junos_common.get_targets()
+        assert targets == ["rt1.example.jp", "sw1.example.jp"]
+
+    def test_and_tag_filter(self, junos_common, mock_args, mock_config_with_tags):
+        """--tags tokyo,core → 両方のタグを持つホスト"""
+        junos_common.args.specialhosts = []
+        junos_common.args.tags = "tokyo,core"
+        targets = junos_common.get_targets()
+        assert targets == ["rt1.example.jp"]
+
+    def test_no_match_exits(self, junos_common, mock_args, mock_config_with_tags):
+        """タグマッチなし & hosts なし → sys.exit"""
+        junos_common.args.specialhosts = []
+        junos_common.args.tags = "nonexistent"
+        with pytest.raises(SystemExit):
+            junos_common.get_targets()
+
+    def test_tags_plus_hosts_union(self, junos_common, mock_args, mock_config_with_tags):
+        """--tags core + hosts → union（重複排除）"""
+        junos_common.args.specialhosts = ["sw2.example.jp"]
+        junos_common.args.tags = "core"
+        targets = junos_common.get_targets()
+        # core タグ: rt1, rt2 + 明示指定: sw2
+        assert targets == ["rt1.example.jp", "rt2.example.jp", "sw2.example.jp"]
+
+    def test_tags_plus_hosts_dedup(self, junos_common, mock_args, mock_config_with_tags):
+        """--tags + hosts で重複するホストは1回だけ"""
+        junos_common.args.specialhosts = ["rt1.example.jp"]
+        junos_common.args.tags = "tokyo"
+        targets = junos_common.get_targets()
+        # tokyo タグ: rt1, sw1 + 明示: rt1（重複）
+        assert targets == ["rt1.example.jp", "sw1.example.jp"]
+
+    def test_case_insensitive_tags(self, junos_common, mock_args, mock_config_with_tags):
+        """--tags は大文字小文字を区別しない"""
+        junos_common.args.specialhosts = []
+        junos_common.args.tags = "TOKYO,CORE"
+        targets = junos_common.get_targets()
+        assert targets == ["rt1.example.jp"]
+
+    def test_tags_whitespace(self, junos_common, mock_args, mock_config_with_tags):
+        """--tags のスペースがトリムされる"""
+        junos_common.args.specialhosts = []
+        junos_common.args.tags = "  tokyo  ,  core  "
+        targets = junos_common.get_targets()
+        assert targets == ["rt1.example.jp"]
+
+    def test_union_unknown_host_exits(self, junos_common, mock_args, mock_config_with_tags):
+        """union 時の不明ホストで sys.exit"""
+        junos_common.args.specialhosts = ["unknown-host"]
+        junos_common.args.tags = "tokyo"
+        with pytest.raises(SystemExit):
+            junos_common.get_targets()
+
+    def test_core_tag_filter(self, junos_common, mock_args, mock_config_with_tags):
+        """--tags core → core タグを持つホスト"""
+        junos_common.args.specialhosts = []
+        junos_common.args.tags = "core"
+        targets = junos_common.get_targets()
+        assert targets == ["rt1.example.jp", "rt2.example.jp"]
+
+    def test_access_tag_filter(self, junos_common, mock_args, mock_config_with_tags):
+        """--tags access → access タグを持つホスト"""
+        junos_common.args.specialhosts = []
+        junos_common.args.tags = "access"
+        targets = junos_common.get_targets()
+        assert targets == ["sw1.example.jp"]

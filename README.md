@@ -138,11 +138,14 @@ Each section name becomes the hostname. DEFAULT values can be overridden per hos
 
 ```ini
 [rt1.example.jp]             # Section name is used as the connection hostname
+tags = tokyo, core           # Tag-based host filtering (--tags)
 [rt2.example.jp]
 host = 192.0.2.1             # Override connection target with IP address
+tags = osaka, core
 [sw1.example.jp]
 id = sw1                     # Override SSH username
 sshkey = sw1_rsa             # Override SSH key
+tags = tokyo, access
 [sw2.example.jp]
 port = 10830                 # Override port
 [sw3.example.jp]
@@ -180,6 +183,7 @@ junos-ops <subcommand> [options] [hostname ...]
 | `-n`, `--dry-run` | Test run (connect and display messages only, no execution) |
 | `-d`, `--debug` | Debug output |
 | `--force` | Force execution regardless of conditions |
+| `--tags TAG,...` | Filter hosts by tags (comma-separated, AND match) |
 | `--workers N` | Parallel workers (default: 1 for upgrade, 20 for rsi) |
 | `--version` | Show program version |
 
@@ -187,7 +191,7 @@ junos-ops <subcommand> [options] [hostname ...]
 
 ### CLI Architecture Overview
 
-All subcommands share the same execution pipeline: read the config file, determine target hosts, then dispatch each host to a worker thread via `ThreadPoolExecutor`. The `--workers N` option controls parallelism — defaulting to 1 for upgrade operations (safe sequential execution) and 20 for RSI collection (I/O-bound, benefits from concurrency). Each worker establishes its own NETCONF session, so hosts are processed independently with no shared state.
+All subcommands share the same execution pipeline: read the config file, determine target hosts (optionally filtered by `--tags`), then dispatch each host to a worker thread via `ThreadPoolExecutor`. The `--workers N` option controls parallelism — defaulting to 1 for upgrade operations (safe sequential execution) and 20 for RSI collection (I/O-bound, benefits from concurrency). Each worker establishes its own NETCONF session, so hosts are processed independently with no shared state.
 
 ```mermaid
 flowchart TD
@@ -343,6 +347,21 @@ The health check determines success as follows:
 
 4. Apply without health check
    junos-ops config -f commands.set --no-health-check hostname
+```
+
+### Tag-based Host Filtering
+
+Use `--tags` to target hosts by tags defined in config.ini. Multiple tags are AND-matched (hosts must have all specified tags). When combined with explicit hostnames, the results are merged (union).
+
+```
+# All hosts tagged "tokyo"
+junos-ops version --tags tokyo
+
+# Hosts tagged both "tokyo" AND "core"
+junos-ops version --tags tokyo,core
+
+# Tags union with explicit hosts
+junos-ops version --tags core rt3.example.jp
 ```
 
 ## Examples

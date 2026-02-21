@@ -45,6 +45,7 @@ def mock_args(junos_common):
         health_check="ping count 3 8.8.8.8 rapid",
         show_command=None,
         showfile=None,
+        tags=None,
         specialhosts=[],
     )
     return junos_common.args
