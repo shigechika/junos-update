@@ -167,7 +167,7 @@ junos-ops <subcommand> [options] [hostname ...]
 | `version` | running/planning/pendingバージョンとリブート予定を表示 |
 | `reboot --at YYMMDDHHMM` | 指定日時にリブートをスケジュール |
 | `ls [-l]` | リモートパスのファイル一覧 |
-| `config -f FILE [--confirm N]` | set コマンドファイルを適用 |
+| `config -f FILE [--confirm N] [--health-check CMD \| --no-health-check]` | set コマンドファイルを適用 |
 | `rsi` | RSI/SCF を並列収集 |
 | （なし） | デバイスファクト（device facts）を表示 |
 
@@ -294,7 +294,15 @@ flowchart TD
 
 ### config 適用ワークフロー
 
-`config` サブコマンドは2段階コミットを採用しています。まず `commit confirmed`（自動ロールバックタイマー付き）を実行し、次に `commit`（確定）を実行します。タイムアウト内に確定コミットが行われない場合、JUNOS が自動的に変更をロールバックします。
+`config` サブコマンドは3段階のコミットフローを採用しています。`commit confirmed`（自動ロールバックタイマー） → **ヘルスチェック** → `commit`（確定）の順に実行します。ヘルスチェックが失敗した場合、最終 `commit` を送信せず、タイマー満了時に JUNOS が自動的にロールバックします。手動操作は不要です。
+
+デフォルトでは `ping count 3 8.8.8.8 rapid` がヘルスチェックとして実行されます。`--health-check` でカスタムコマンドを指定するか、`--no-health-check` でチェックをスキップできます。
+
+| オプション | 説明 |
+|-----------|------|
+| `--health-check CMD` | ヘルスチェックコマンドを指定（デフォルト: `"ping count 3 8.8.8.8 rapid"`） |
+| `--no-health-check` | commit confirmed 後のヘルスチェックをスキップ |
+| `--confirm N` | commit confirmed のタイムアウト（分、デフォルト: 1） |
 
 ```mermaid
 flowchart TD
@@ -305,23 +313,36 @@ flowchart TD
     E -->|yes| F["差分表示<br/>ロールバック"] --> D
     E -->|no| G[commit check]
     G --> H["commit confirmed N<br/>（自動ロールバックタイマー）"]:::warned
-    H --> I["commit<br/>変更を確定"]:::safe
+    H --> HC{"ヘルスチェック<br/>（デフォルト: ping 8.8.8.8）"}
+    HC -->|成功| I["commit<br/>変更を確定"]:::safe
+    HC -->|失敗| AR["commit を保留<br/>→ N 分後に自動ロールバック"]:::errstyle
+    AR --> D
     I --> D
     G -->|エラー| J[ロールバック + アンロック]:::errstyle
     H -->|エラー| J
-    I -->|エラー| J
 
     classDef warned fill:#fff3cd,stroke:#ffc107,color:#000
     classDef safe fill:#d4edda,stroke:#28a745,color:#000
     classDef errstyle fill:#f8d7da,stroke:#dc3545,color:#000
 ```
 
+ヘルスチェックの成功判定は以下の通りです:
+
+- **ping コマンド** (`ping ...`): 出力から `N packets received` を解析し、N > 0 で成功
+- **それ以外のコマンド** (`show ...` 等): 例外なく実行できれば成功
+
 ```
 1. dry-run で差分を確認
    junos-ops config -f commands.set -n hostname
 
-2. 適用
+2. 適用（デフォルトの ping ヘルスチェック付き）
    junos-ops config -f commands.set hostname
+
+3. カスタムヘルスチェックで適用
+   junos-ops config -f commands.set --health-check "ping count 5 10.0.0.1 rapid" hostname
+
+4. ヘルスチェックなしで適用
+   junos-ops config -f commands.set --no-health-check hostname
 ```
 
 ## 実行例
@@ -403,12 +424,14 @@ set system login user viewer authentication ssh-ed25519 "ssh-ed25519 AAAA..."
 	...
 	commit check passed
 	commit confirmed 1 applied
+	health check: ping count 3 8.8.8.8 rapid
+	health check passed (3 packets received)
 	commit confirmed, changes are now permanent
 # rt2.example.jp
 	...
 ```
 
-`--confirm N` で commit confirmed のタイムアウトを変更できます（デフォルト: 1分）。
+`--confirm N` で commit confirmed のタイムアウトを変更できます（デフォルト: 1分）。`--no-health-check` でコミット後のヘルスチェックをスキップできます。
 
 set ファイルには `#` コメント行や空行を含めることができます。適用前に自動的に除去されます。
 

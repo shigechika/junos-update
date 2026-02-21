@@ -167,7 +167,7 @@ junos-ops <subcommand> [options] [hostname ...]
 | `version` | Show running/planning/pending versions and reboot schedule |
 | `reboot --at YYMMDDHHMM` | Schedule a reboot at the specified time |
 | `ls [-l]` | List files on the remote path |
-| `config -f FILE [--confirm N]` | Push a set command file to devices |
+| `config -f FILE [--confirm N] [--health-check CMD \| --no-health-check]` | Push a set command file to devices |
 | `rsi` | Collect RSI/SCF in parallel |
 | (none) | Show device facts |
 
@@ -294,7 +294,15 @@ flowchart TD
 
 ### Config Push Workflow
 
-The `config` subcommand uses a two-phase commit: `commit confirmed` (auto-rollback timer) followed by `commit` (permanent). If the second commit is not issued within the timeout, JUNOS automatically rolls back the change.
+The `config` subcommand uses a three-phase commit flow: `commit confirmed` (auto-rollback timer) → **health check** → `commit` (permanent). If the health check fails, the final `commit` is withheld and JUNOS automatically rolls back the change when the timer expires — no manual intervention required.
+
+By default, `ping count 3 8.8.8.8 rapid` is executed as the health check. Use `--health-check` to specify a custom command, or `--no-health-check` to skip the check entirely.
+
+| Option | Description |
+|--------|-------------|
+| `--health-check CMD` | Custom health check command (default: `"ping count 3 8.8.8.8 rapid"`) |
+| `--no-health-check` | Skip health check after commit confirmed |
+| `--confirm N` | Commit confirmed timeout in minutes (default: 1) |
 
 ```mermaid
 flowchart TD
@@ -305,23 +313,36 @@ flowchart TD
     E -->|yes| F["print diff<br/>rollback"] --> D
     E -->|no| G[commit check]
     G --> H["commit confirmed N<br/>(auto-rollback timer)"]:::warned
-    H --> I["commit<br/>changes permanent"]:::safe
+    H --> HC{"health check<br/>(default: ping 8.8.8.8)"}
+    HC -->|pass| I["commit<br/>changes permanent"]:::safe
+    HC -->|fail| AR["withhold commit<br/>→ auto-rollback<br/>in N minutes"]:::errstyle
+    AR --> D
     I --> D
     G -->|error| J[rollback + unlock]:::errstyle
     H -->|error| J
-    I -->|error| J
 
     classDef warned fill:#fff3cd,stroke:#ffc107,color:#000
     classDef safe fill:#d4edda,stroke:#28a745,color:#000
     classDef errstyle fill:#f8d7da,stroke:#dc3545,color:#000
 ```
 
+The health check determines success as follows:
+
+- **ping commands** (`ping ...`): parse the output for `N packets received` — success if N > 0
+- **Other commands** (`show ...`, etc.): success if the command executes without exception
+
 ```
 1. Preview changes with dry-run
    junos-ops config -f commands.set -n hostname
 
-2. Apply changes
+2. Apply changes (with default ping health check)
    junos-ops config -f commands.set hostname
+
+3. Apply with custom health check
+   junos-ops config -f commands.set --health-check "ping count 5 10.0.0.1 rapid" hostname
+
+4. Apply without health check
+   junos-ops config -f commands.set --no-health-check hostname
 ```
 
 ## Examples
@@ -403,12 +424,14 @@ set system login user viewer authentication ssh-ed25519 "ssh-ed25519 AAAA..."
 	...
 	commit check passed
 	commit confirmed 1 applied
+	health check: ping count 3 8.8.8.8 rapid
+	health check passed (3 packets received)
 	commit confirmed, changes are now permanent
 # rt2.example.jp
 	...
 ```
 
-Use `--confirm N` to change the commit confirmed timeout (default: 1 minute).
+Use `--confirm N` to change the commit confirmed timeout (default: 1 minute). Use `--no-health-check` to skip the post-commit health check.
 
 Set files can include `#` comments and blank lines — they are automatically stripped before sending to the device.
 

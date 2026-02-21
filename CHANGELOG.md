@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `config --health-check` / `--no-health-check`: run a health check command (default: `ping count 3 8.8.8.8 rapid`) between `commit confirmed` and the final `commit`. On failure, the final commit is withheld and JUNOS auto-rolls back when the timer expires.
+
 ## [0.7.0] - 2026-02-21
 
 ### Added
